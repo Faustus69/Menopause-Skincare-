@@ -1,0 +1,107 @@
+--- src/types.ts
++++ src/types.ts
+@@ -21,3 +21,3 @@
+ 
+-export type Screen = 'home' | 'concern_list' | 'concern_results' | 'ingredient_az' | 'ingredient_detail' | 'barrier_quiz' | 'barrier_results' | 'how_to_use' | 'favorites' | 'product_analyzer' | 'notes' | 'skin_profiler' | 'saved_scans';
++export type Screen = 'welcome' | 'home' | 'concern_list' | 'concern_results' | 'ingredient_az' | 'ingredient_detail' | 'barrier_quiz' | 'barrier_results' | 'how_to_use' | 'favorites' | 'product_analyzer' | 'notes' | 'skin_profiler' | 'saved_scans';
+ 
+--- src/App.tsx
++++ src/App.tsx
+@@ -19,2 +19,3 @@
+ import SkinProfilerScreen from './components/SkinProfilerScreen';
++import WelcomeScreen from './components/WelcomeScreen';
+ import HeaderMenu from './components/HeaderMenu';
+@@ -25,3 +26,3 @@
+ export default function App() {
+-  const [currentScreen, setCurrentScreen] = useState<Screen>('home');
++  const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
+   const [selectedConcern, setSelectedConcern] = useState<string>('');
+@@ -107,3 +108,3 @@
+   // Custom back-stack history array to simulate true Android system back behaviour
+-  const [history, setHistory] = useState<Screen[]>(['home']);
++  const [history, setHistory] = useState<Screen[]>(['welcome']);
+ 
+@@ -135,2 +136,5 @@
+     switch (currentScreen) {
++      case 'welcome':
++        return <WelcomeScreen onNavigate={(screen) => navigateTo(screen)} />;
++        
+       case 'home':
+@@ -313,6 +317,8 @@
+     <PhoneContainer screen={currentScreen}>
+-      <HeaderMenu 
+-        currentScreen={currentScreen}
+-        onNavigate={navigateTo}
+-        hasBarrierQuizAnswers={Object.keys(quizAnswers).length > 0}
+-      />
++      {currentScreen !== 'welcome' && (
++        <HeaderMenu 
++          currentScreen={currentScreen}
++          onNavigate={navigateTo}
++          hasBarrierQuizAnswers={Object.keys(quizAnswers).length > 0}
++        />
++      )}
+       <div className="flex-1 relative overflow-hidden flex flex-col">
+--- /dev/null
++++ src/components/WelcomeScreen.tsx
+@@ -0,0 +1,52 @@
++/**
++ * @license
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import React from 'react';
++import { motion } from 'motion/react';
++import { ArrowRight } from 'lucide-react';
++import { Screen } from '../types';
++
++interface WelcomeScreenProps {
++  onNavigate: (screen: Screen) => void;
++}
++
++export default function WelcomeScreen({ onNavigate }: WelcomeScreenProps) {
++  return (
++    <motion.div
++      initial={{ opacity: 0 }}
++      animate={{ opacity: 1 }}
++      exit={{ opacity: 0 }}
++      className="flex flex-col min-h-full bg-[var(--bg)] text-[var(--navy)] p-6 md:p-8"
++    >
++      <div className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full">
++        <h1 className="font-serif text-4xl md:text-5xl font-bold leading-tight mb-4 text-[var(--navy)]">
++          The Menopause<br />Skincare Decoder
++        </h1>
++        <p className="text-xl md:text-2xl font-semibold mb-8 text-[var(--sage-dark)] font-sans">
++          Your smarter way to shop for changing skin.
++        </p>
++
++        <div className="bg-[var(--card)] p-6 md:p-8 rounded-3xl shadow-sm border border-[#D8CCBD]/40 mb-8 space-y-5 text-base md:text-lg leading-relaxed text-[var(--navy)]/90 font-sans">
++          <p>
++            When your skin changes in midlife, skincare can suddenly feel like a guessing game. The products get louder, the labels get smaller, and somehow every serum claims to be “advanced.”
++          </p>
++          <p className="font-bold text-[var(--sage-dark)]">
++            This decoder helps you cut through the noise.
++          </p>
++          <p>
++            You will find your barrier profile, choose your current skin concerns, review the evidence based ingredients suggested for you and explore even more. Save the ingredients that suit you. You can then scan product labels using this app on your phone in store to see whether a formula looks promising — or better left on the shelf.
++          </p>
++          <p className="font-medium italic">
++            Clear guidance. Plain English. Smarter choices for menopausal skin.
++          </p>
++        </div>
++
++        <div className="mt-auto pt-4 flex flex-col items-center">
++          <p className="text-[var(--navy)] font-medium mb-4 text-center font-sans text-lg">
++            Ready to shop like you know what you’re doing?
++          </p>
++          <button
++            onClick={() => onNavigate('home')}
++            className="w-full max-w-sm bg-[var(--sage-dark)] hover:opacity-90 text-white py-4 px-8 rounded-2xl font-sans font-bold text-lg transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-3 cursor-pointer"
++          >
++            Let’s dive in <ArrowRight className="w-5 h-5 stroke-[2.5]" />
++          </button>
++        </div>
++      </div>
++    </motion.div>
++  );
++}

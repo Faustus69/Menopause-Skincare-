@@ -1,0 +1,178 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background: 36 38% 96%;
+  --foreground: 20 14% 18%;
+  --card: 36 45% 98%;
+  --card-foreground: 20 14% 18%;
+  --popover: 36 45% 98%;
+  --popover-foreground: 20 14% 18%;
+  --primary: 114 12% 37%;
+  --primary-foreground: 36 45% 98%;
+  --secondary: 18 35% 90%;
+  --secondary-foreground: 12 22% 28%;
+  --muted: 30 22% 92%;
+  --muted-foreground: 20 10% 42%;
+  --accent: 8 38% 78%;
+  --accent-foreground: 20 18% 18%;
+  --destructive: 4 60% 48%;
+  --destructive-foreground: 36 45% 98%;
+  --border: 28 22% 86%;
+  --input: 28 22% 86%;
+  --ring: 114 12% 37%;
+
+  --ivory: 36 38% 96%;
+  --cream: 36 50% 94%;
+  --blush: 14 55% 88%;
+  --rose: 8 40% 72%;
+  --taupe: 22 14% 48%;
+  --charcoal: 20 14% 18%;
+  --gold: 32 38% 52%;
+
+  --shadow-soft: 0 1px 2px hsl(20 14% 18% / 0.04), 0 12px 32px -12px hsl(20 14% 18% / 0.10);
+  --shadow-card: 0 1px 1px hsl(20 14% 18% / 0.03), 0 20px 40px -24px hsl(20 14% 18% / 0.18);
+}
+
+@theme {
+  --font-serif: "Fraunces", "Playfair Display", ui-serif, Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-border: hsl(var(--border));
+  
+  --color-ivory: hsl(var(--ivory));
+  --color-cream: hsl(var(--cream));
+  --color-blush: hsl(var(--blush));
+  --color-rose: hsl(var(--rose));
+  --color-taupe: hsl(var(--taupe));
+  --color-charcoal: hsl(var(--charcoal));
+  --color-gold: hsl(var(--gold));
+}
+
+body {
+  background-color: var(--bg);
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+}
+
+.font-serif {
+  font-family: var(--font-serif) !important;
+  font-variant-ligatures: none;
+  -webkit-font-variant-ligatures: none;
+}
+
+.bg-hero {
+  background: radial-gradient(120% 80% at 50% 0%, hsl(14 55% 92%) 0%, hsl(36 38% 96%) 60%);
+}
+
+.bg-card-gradient {
+  background: linear-gradient(160deg, hsl(36 50% 97%) 0%, hsl(18 35% 93%) 100%);
+}
+
+.transition-base {
+  transition: all 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ==========================================================================
+   Design System Bridges: Mapping older palette keys elegantly to brand colors
+   ========================================================================== */
+
+/* Navy Blue Primary mapping to Deep Taupe-Rose */
+.bg-\[\#1B263B\] {
+  background-color: #556953 !important;
+}
+.text-\[\#1B263B\] {
+  color: #556953 !important;
+}
+.border-\[\#1B263B\] {
+  border-color: #556953 !important;
+}
+.hover\:bg-\[\#253447\]:hover {
+  background-color: #4A5D48 !important;
+}
+
+/* Brand Gold mapping to Warm Antique Gold */
+.bg-\[\#C5A059\] {
+  background-color: hsl(var(--gold)) !important;
+}
+.text-\[\#C5A059\] {
+  color: hsl(var(--gold)) !important;
+}
+.border-\[\#C5A059\] {
+  border-color: hsl(var(--gold)) !important;
+}
+
+/* Blush mapping to Soft Blush or Coral Accent */
+.bg-\[\#DAA89B\] {
+  background-color: hsl(var(--accent)) !important;
+}
+.text-\[\#DAA89B\] {
+  color: hsl(var(--accent)) !important;
+}
+.border-\[\#DAA89B\] {
+  border-color: hsl(var(--accent)) !important;
+}
+.bg-\[\#FAF9F6\], .bg-\[\#FAF9F6\] {
+  background-color: var(--bg) !important;
+}
+
+/* Update brown top navigation header bars and status bar to sage green */
+.sticky.top-0.bg-\[\#1B263B\],
+#android_status_bar,
+.rounded-b-xl.bg-\[hsl\(var\(--primary\)\)\] {
+  background-color: var(--sage-dark) !important;
+}
+
+/* Soft Rose Border mapping to warm blush */
+.border-\[\#E2B4BD\] {
+  border-color: hsl(var(--secondary)) !important;
+}
+.bg-\[\#E2B4BD\] {
+  background-color: hsl(var(--secondary)) !important;
+}
+
+/* Rounded card standards */
+.rounded-2xl {
+  border-radius: var(--radius) !important;
+}
+.rounded-3xl {
+  border-radius: 1.5rem !important;
+}
+
+/* Override default scrollbars horizontally in code analyzer or list */
+::-webkit-scrollbar {
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 99px;
+}
+
+:root {
+  --bg: #F7F1E7;
+  --card: #FFF9F0;
+  --sage: #A8BFA3;
+  --sage-dark: #556953;
+  --rose: #D8A7A0;
+  --navy: #1F2A3D;
+  --gold: #C9A85A;
+  --border: #D8CCBD;
+}

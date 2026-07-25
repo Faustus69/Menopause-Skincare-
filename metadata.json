@@ -1,0 +1,6 @@
+{
+  "name": "The Menopause Skincare Decoder",
+  "description": "Understand skincare ingredients with confidence, especially optimized for women 45+ shopping for skincare products.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

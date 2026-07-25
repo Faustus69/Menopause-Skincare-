@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User's skin profile data",
+      "type": "object",
+      "properties": {
+        "barrierType": { "type": "string" },
+        "concerns": { "type": "array", "items": { "type": "string" } },
+        "recommendedIngredients": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["createdAt", "updatedAt"]
+    },
+    "Scan": {
+      "title": "Scan",
+      "description": "A saved product scan",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "productName": { "type": "string" },
+        "summary": { "type": "string" },
+        "ingredients": { "type": "array" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["userId", "productName", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles"
+    },
+    "/users/{userId}/scans/{scanId}": {
+      "schema": { "$ref": "#/entities/Scan" },
+      "description": "Saved product scans"
+    }
+  }
+}
