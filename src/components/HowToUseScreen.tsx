@@ -47,23 +47,9 @@ export default function HowToUseScreen({ onNavigate, onGoBack }: HowToUseScreenP
     >
       {/* Header bar */}
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 border-b border-stone-200/10 font-sans">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onGoBack}
-            className="p-1 text-stone-300 hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-            title="Go Back"
-          >
-            <ArrowLeft className="w-6 h-6 text-[#DAA89B]" />
-          </button>
+        <div className="flex items-center">
           <span className="font-serif font-semibold text-base tracking-wide text-white">How to Use</span>
         </div>
-        <button 
-          onClick={() => onNavigate('home')}
-          className="p-1 text-[#DAA89B] hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-          title="Home"
-        >
-          <Home className="w-5 h-5" />
-        </button>
       </div>
 
       <div className="p-6 max-w-xl mx-auto w-full flex-1 flex flex-col">
@@ -443,28 +429,9 @@ export default function HowToUseScreen({ onNavigate, onGoBack }: HowToUseScreenP
           </AnimatePresence>
         </div>
 
-        {/* Global Action back Home */}
-        <div className="mt-8">
-          <button
-            onClick={() => onNavigate('home')}
-            className="w-full bg-[#1B263B] hover:bg-[#253447] text-white text-xs font-bold font-sans tracking-widest uppercase py-4 rounded-xl cursor-pointer shadow-xs transition-all active:scale-[0.99] text-center"
-          >
-            Go back to Home dashboard
-          </button>
-        </div>
-
         {/* Elegant Bottom Navigation footer */}
         <div className="mt-8 pt-6 border-t border-stone-200/60 flex flex-col items-center gap-4 select-none">
-          <div className="flex items-center justify-between w-full">
-            {/* Previous Page Link with Arrow */}
-            <button
-              onClick={onGoBack}
-              className="flex items-center gap-1.5 text-xs font-sans font-bold text-[#1B263B] hover:text-[#C5A059] transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4 text-[#DAA89B]" />
-              <span>Back to Previous Screen</span>
-            </button>
-
+          <div className="flex items-center justify-end w-full">
             {/* Back to Top Anchor */}
             <button
               onClick={() => {

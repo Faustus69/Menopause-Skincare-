@@ -105,29 +105,9 @@ export default function BarrierResultsScreen({
     >
       {/* Header bar */}
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 border-b border-stone-200/10 font-sans">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => onNavigate('concern_list')}
-            className="p-1 text-stone-300 hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-            title="Choose Skin Concern"
-          >
-            <ArrowLeft className="w-6 h-6 text-[#DAA89B]" />
-          </button>
-          <button
-            onClick={() => onNavigate('concern_list')}
-            className="font-serif font-semibold text-base tracking-wide text-white bg-transparent border-none p-0 cursor-pointer hover:text-[#DAA89B] transition-colors text-left"
-            title="Choose Skin Concern"
-          >
-            Your Barrier Profile
-          </button>
+        <div className="flex items-center">
+          <span className="font-serif font-semibold text-base tracking-wide text-white">Your Barrier Profile</span>
         </div>
-        <button 
-          onClick={() => onNavigate('home')}
-          className="p-1 text-[#DAA89B] hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-          title="Home"
-        >
-          <Home className="w-5 h-5" />
-        </button>
       </div>
 
       <div className="p-6">
@@ -286,10 +266,13 @@ export default function BarrierResultsScreen({
                             e.stopPropagation();
                             onToggleFavorite(ing.id);
                           }}
-                          className="p-1.5 rounded-full hover:bg-rose-50 transition-colors cursor-pointer text-[#DAA89B] hover:text-rose-500 active:scale-90"
+                          className="p-1 rounded-xl hover:bg-rose-50 transition-colors cursor-pointer text-[#DAA89B] hover:text-rose-500 active:scale-90 flex flex-col items-center gap-0.5 shrink-0"
                           title={isFav ? "Remove from Favorites" : "Add to Favorites"}
                         >
                           <Heart className={`w-4 h-4 ${isFav ? "fill-rose-500 text-rose-500" : "text-stone-400"}`} />
+                          <span className={`text-[9px] font-sans font-bold leading-none ${isFav ? 'text-rose-500' : 'text-stone-500'}`}>
+                            {isFav ? 'Saved' : 'Save'}
+                          </span>
                         </button>
                       )}
                       <ChevronRight className="w-4 h-4 text-stone-400 group-hover:text-[#C5A059] group-hover:translate-x-0.5 transition-all shrink-0" />
@@ -345,16 +328,7 @@ export default function BarrierResultsScreen({
 
         {/* Elegant Bottom Navigation footer */}
         <div className="mt-8 pt-6 border-t border-stone-200/60 flex flex-col items-center gap-4 select-none">
-          <div className="flex items-center justify-between w-full">
-            {/* Previous Page Link with Arrow */}
-            <button
-              onClick={() => onNavigate('concern_list')}
-              className="flex items-center gap-1.5 text-xs font-sans font-bold text-[#1B263B] hover:text-[#C5A059] transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4 text-[#DAA89B]" />
-              <span>Choose Your Skin Concern (Step 3)</span>
-            </button>
-
+          <div className="flex items-center justify-end w-full">
             {/* Back to Top Anchor */}
             <button
               onClick={() => {

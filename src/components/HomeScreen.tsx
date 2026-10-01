@@ -5,14 +5,16 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, BookOpen, Search, ArrowRight, ArrowLeft, HelpCircle, Heart, Camera } from 'lucide-react';
+import { Sparkles, BookOpen, Search, ArrowRight, ArrowLeft, HelpCircle, Heart, Camera, SunMoon, Star, Download } from 'lucide-react';
 import { Screen } from '../types';
 
 interface HomeScreenProps {
   onNavigate: (screen: Screen) => void;
+  isPro?: boolean;
+  onOpenInstallModal?: () => void;
 }
 
-export default function HomeScreen({ onNavigate }: HomeScreenProps) {
+export default function HomeScreen({ onNavigate, isPro = false, onOpenInstallModal }: HomeScreenProps) {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 15 }}
@@ -57,6 +59,42 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
         {/* Options buttons */}
         <div className="flex flex-col gap-4 max-w-sm mx-auto w-full">
+
+          {/* Pro Pass Banner */}
+          <motion.div
+            whileTap={{ scale: 0.98 }}
+            onClick={() => onNavigate('upgrade')}
+            className={`w-full p-4 rounded-2xl flex items-center justify-between shadow-md border cursor-pointer text-left relative z-10 transition-all ${
+              isPro
+                ? 'bg-gradient-to-r from-amber-50 to-amber-100 border-amber-300 text-amber-950'
+                : 'bg-gradient-to-r from-[#1B263B] to-[#2C3E50] border-amber-300/40 text-white'
+            }`}
+          >
+            <div className="flex items-center gap-3.5">
+              <div className={`p-2.5 rounded-xl border ${
+                isPro ? 'bg-amber-400/20 border-amber-400/50 text-amber-800' : 'bg-amber-400/20 border-amber-300/40 text-amber-300'
+              }`}>
+                {isPro ? <Star className="w-5 h-5 fill-current" /> : <Sparkles className="w-5 h-5" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-serif font-bold">
+                    {isPro ? 'Wise Bloom Pro Active ★' : 'Wise Bloom Pro'}
+                  </span>
+                  {!isPro && (
+                    <span className="text-[9px] bg-[#C5A059] text-white px-2 py-0.5 rounded-full font-sans font-bold uppercase tracking-wider">
+                      £9.99 Lifetime
+                    </span>
+                  )}
+                </div>
+                <span className={`text-xs font-sans block mt-0.5 ${isPro ? 'text-amber-800' : 'text-stone-300'}`}>
+                  {isPro ? 'All 50+ clinical dossiers & scanner active' : 'Full clinical studies, AI scanner & routines'}
+                </span>
+              </div>
+            </div>
+            <ArrowRight className={`w-4 h-4 ${isPro ? 'text-amber-900' : 'text-[#C5A059]'}`} />
+          </motion.div>
+
           {/* Action Button 1: How to use */}
           <motion.button
             whileTap={{ scale: 0.98 }}
@@ -150,6 +188,29 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             <ArrowRight className="w-5 h-5 text-[#6D8A68] transition-transform group-hover:translate-x-1" />
           </motion.button>
 
+          {/* Action Button: Routine Builder */}
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={() => onNavigate('routine_builder')}
+            id="home_btn_routine_builder"
+            className="w-full bg-[#F9F7F3] hover:bg-[#F0EEEA] p-5 rounded-2xl flex items-center justify-between shadow-sm border-[3px] border-[#CD8B80] transition-colors cursor-pointer group text-left relative z-10"
+          >
+            <div className="flex items-center gap-4">
+              <div className="p-2.5 bg-white border-2 border-[#CD8B80] rounded-xl text-black">
+                <SunMoon className="w-5.5 h-5.5 stroke-[2]" />
+              </div>
+              <div>
+                <span className="block text-[15px] font-bold text-[#6D8A68] font-sans">
+                  Routine Builder (AM / PM)
+                </span>
+                <span className="block text-xs text-[#1A2622]/60 font-sans mt-0.5 font-light">
+                  Categorize ingredients into morning & evening guides
+                </span>
+              </div>
+            </div>
+            <ArrowRight className="w-5 h-5 text-[#6D8A68] transition-transform group-hover:translate-x-1" />
+          </motion.button>
+
           {/* Action Button 4: Favorites */}
           <motion.button
             whileTap={{ scale: 0.98 }}
@@ -195,6 +256,31 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             </div>
             <ArrowRight className="w-5 h-5 text-[#6D8A68] transition-transform group-hover:translate-x-1" />
           </motion.button>
+
+          {/* Action Button: Install App to Phone */}
+          {onOpenInstallModal && (
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={onOpenInstallModal}
+              id="home_btn_install_app"
+              className="w-full bg-[#1B263B] hover:bg-[#2C3E50] p-4 rounded-2xl flex items-center justify-between text-white shadow-sm border border-stone-700 transition-colors cursor-pointer text-left relative z-10"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 bg-white/10 rounded-xl text-white">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="block text-sm font-bold text-white font-sans">
+                    Install App to Phone
+                  </span>
+                  <span className="block text-xs text-stone-300 font-sans mt-0.5">
+                    Fast full-screen access on iOS & Android
+                  </span>
+                </div>
+              </div>
+              <ArrowRight className="w-5 h-5 text-white/80" />
+            </motion.button>
+          )}
         </div>
       </div>
 
@@ -206,16 +292,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         <p className="text-[10px] text-[#1A2622]/60 leading-relaxed font-sans">
           This guide is for skincare education only. Patch test new products and seek professional advice for diagnosed skin conditions.
         </p>
-      </div>
-
-      {/* Previous Page Button */}
-      <div className="mt-6 flex justify-center z-10 relative pb-2">
-        <button
-          onClick={() => onNavigate('welcome')}
-          className="inline-flex items-center gap-2 text-[#6D8A68] hover:text-[#556953] transition-colors py-2 px-4 rounded-full hover:bg-black/5 font-sans font-medium text-sm"
-        >
-          <ArrowLeft className="w-4 h-4" /> Previous Page
-        </button>
       </div>
     </motion.div>
   );

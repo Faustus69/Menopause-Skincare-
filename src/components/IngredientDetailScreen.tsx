@@ -3,15 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   ArrowLeft, Home, Award, Scale, HelpCircle, Heart, 
   Sparkles, CheckCircle2, AlertTriangle, XOctagon, UserCheck,
-  Beaker, Lightbulb
+  Beaker, Lightbulb, FlaskConical, ExternalLink, BookOpen, ChevronDown, ChevronUp, GraduationCap
 } from 'lucide-react';
 import { INGREDIENTS_DATA } from '../data';
 import { Screen, IngredientRecord } from '../types';
+import { getClinicalEvidence } from '../clinicalEvidence';
 
 interface IngredientDetailScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -34,6 +35,8 @@ export default function IngredientDetailScreen({
   );
 
   const isFavorited = favorites.includes(selectedIngredientId);
+  const [showAdditionalStudies, setShowAdditionalStudies] = useState(false);
+  const clinicalEvidence = ingredient ? getClinicalEvidence(ingredient.id, ingredient) : null;
 
   if (!ingredient) {
     return (
@@ -69,24 +72,9 @@ export default function IngredientDetailScreen({
     >
       {/* Header element */}
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 border-b border-stone-200/10 select-none font-sans">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onGoBack}
-            className="p-1 text-stone-300 hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-            title="Go Back"
-          >
-            <ArrowLeft className="w-6 h-6 text-[#DAA89B]" />
-          </button>
+        <div className="flex items-center">
           <span className="font-serif font-semibold text-base tracking-wide text-white">Decoder Card</span>
         </div>
-        
-        <button 
-          onClick={() => onNavigate('home')}
-          className="p-1 text-[#DAA89B] hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-          title="Home"
-        >
-          <Home className="w-5 h-5" />
-        </button>
       </div>
 
       <div className="p-6 bg-[#FAF9F6]">
@@ -107,11 +95,14 @@ export default function IngredientDetailScreen({
           {onToggleFavorite && (
             <button
               onClick={() => onToggleFavorite(ingredient.id)}
-              className="p-3 bg-white hover:bg-stone-50 border border-stone-200/60 shadow-xs rounded-2xl cursor-pointer text-[#C5A059] transition-transform active:scale-95 flex items-center justify-center shrink-0 self-start"
+              className="px-3 py-2 bg-white hover:bg-stone-50 border border-stone-200/60 shadow-xs rounded-2xl cursor-pointer text-[#C5A059] transition-transform active:scale-95 flex flex-col items-center justify-center gap-0.5 shrink-0 self-start"
               id="detail_fav_btn"
               title={isFavorited ? "Remove from Favorites" : "Save to Favorites"}
             >
-              <Heart className={`w-5.5 h-5.5 ${isFavorited ? 'fill-[#C5A059] text-[#C5A059]' : 'text-stone-400'}`} />
+              <Heart className={`w-5 h-5 ${isFavorited ? 'fill-[#C5A059] text-[#C5A059]' : 'text-stone-400'}`} />
+              <span className={`text-[10px] font-sans font-bold leading-none ${isFavorited ? 'text-[#C5A059]' : 'text-stone-500'}`}>
+                {isFavorited ? 'Saved' : 'Save'}
+              </span>
             </button>
           )}
         </div>
@@ -262,15 +253,130 @@ export default function IngredientDetailScreen({
             </div>
           </div>
 
-          {/* 12. Evidence Level Badge */}
+          {/* 12. Clinical Evidence & Dermatological Studies Section */}
           <div className={getBoxStyle()}>
-            <div className="flex items-center gap-2 mb-3 text-black text-sm font-sans font-bold uppercase tracking-wider">
-              <Award className="w-5 h-5 text-black shrink-0" />
-              <span>Science Evidence Level</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-black text-sm font-sans font-bold uppercase tracking-wider">
+                <FlaskConical className="w-5 h-5 text-black shrink-0" />
+                <span>Clinical Evidence</span>
+              </div>
+              <span className="text-[10px] font-sans font-bold px-2.5 py-1 rounded-full bg-[#1B263B] text-white">
+                {clinicalEvidence?.evidenceLevel || ingredient.evidenceLevel}
+              </span>
             </div>
-            <p className="text-sm font-sans text-black font-bold leading-relaxed">
-              {ingredient.evidenceLevel}
+
+            {/* Scientific Consensus Summary */}
+            <p className="text-sm font-sans text-black font-semibold leading-relaxed">
+              {clinicalEvidence?.consensusSummary}
             </p>
+
+            {/* Dermatological Guidance Callout */}
+            {clinicalEvidence?.dermatologicalTakeaway && (
+              <div className="mt-3 p-3 bg-white/80 rounded-xl border border-black/10 text-xs font-sans text-black leading-relaxed">
+                <span className="font-bold text-[#1B263B] block mb-0.5">🩺 Dermatologist Takeaway:</span>
+                {clinicalEvidence.dermatologicalTakeaway}
+              </div>
+            )}
+
+            {/* Featured Dermatological Study Card */}
+            {clinicalEvidence?.primaryStudy && (
+              <div className="mt-4 p-4 bg-white rounded-xl border-2 border-black/15 shadow-2xs">
+                <div className="flex items-center gap-1.5 text-[11px] font-sans font-bold uppercase tracking-wider text-[#C5A059] mb-1.5">
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Key Dermatological Study</span>
+                </div>
+
+                <h4 className="font-serif text-sm font-bold text-[#1B263B] leading-snug">
+                  "{clinicalEvidence.primaryStudy.title}"
+                </h4>
+
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-sans text-stone-500">
+                  <span className="font-semibold text-stone-700">{clinicalEvidence.primaryStudy.journal}</span>
+                  {clinicalEvidence.primaryStudy.year && <span>• {clinicalEvidence.primaryStudy.year}</span>}
+                  {clinicalEvidence.primaryStudy.authors && (
+                    <span className="truncate max-w-[200px]">• {clinicalEvidence.primaryStudy.authors}</span>
+                  )}
+                </div>
+
+                {clinicalEvidence.primaryStudy.studyType && (
+                  <div className="mt-2 inline-block px-2 py-0.5 rounded bg-stone-100 text-stone-700 text-[10px] font-sans font-semibold border border-stone-200">
+                    {clinicalEvidence.primaryStudy.studyType}
+                  </div>
+                )}
+
+                {/* Key Outcome Highlight */}
+                {clinicalEvidence.primaryStudy.keyOutcome && (
+                  <div className="mt-2.5 p-2 bg-[#F4FAF7] border border-[#1B263B]/20 rounded-lg text-xs font-sans text-black leading-relaxed">
+                    <strong className="text-[#1B263B]">Key Outcome: </strong>
+                    {clinicalEvidence.primaryStudy.keyOutcome}
+                  </div>
+                )}
+
+                <p className="mt-2 text-xs font-sans text-stone-700 leading-relaxed">
+                  {clinicalEvidence.primaryStudy.summary}
+                </p>
+
+                {/* Link to clinical study / PubMed */}
+                <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between">
+                  <span className="text-[10px] font-sans font-medium text-stone-500">
+                    {clinicalEvidence.primaryStudy.pmid ? `PubMed ID: ${clinicalEvidence.primaryStudy.pmid}` : 'Indexed Medical Literature'}
+                  </span>
+                  <a
+                    href={clinicalEvidence.primaryStudy.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1B263B] hover:bg-[#2C3E50] text-white rounded-lg text-xs font-sans font-semibold transition-transform active:scale-95 shadow-2xs"
+                  >
+                    <span>Read Study Reference</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Additional Studies Toggle (if available) */}
+            {clinicalEvidence?.additionalStudies && clinicalEvidence.additionalStudies.length > 0 && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAdditionalStudies(!showAdditionalStudies)}
+                  className="w-full flex items-center justify-between py-2 text-xs font-sans font-bold text-[#1B263B] hover:text-[#C5A059] transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <GraduationCap className="w-3.5 h-3.5" />
+                    Additional Supporting Studies ({clinicalEvidence.additionalStudies.length})
+                  </span>
+                  {showAdditionalStudies ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+
+                {showAdditionalStudies && (
+                  <div className="mt-2 flex flex-col gap-2.5 pt-1">
+                    {clinicalEvidence.additionalStudies.map((study, idx) => (
+                      <div key={idx} className="p-3 bg-white/90 rounded-lg border border-black/10 text-xs font-sans">
+                        <div className="font-bold text-[#1B263B] leading-snug">"{study.title}"</div>
+                        <div className="text-[10.5px] text-stone-500 mt-0.5">
+                          {study.journal} ({study.year}) • {study.authors}
+                        </div>
+                        <p className="mt-1.5 text-stone-700 text-[11px] leading-relaxed">
+                          {study.summary}
+                        </p>
+                        <div className="mt-2 text-right">
+                          <a
+                            href={study.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1B263B] hover:text-[#C5A059] underline"
+                          >
+                            <span>View PubMed Abstract</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Core directory return shortcuts */}
@@ -291,32 +397,6 @@ export default function IngredientDetailScreen({
 
           {/* Elegant Bottom Navigation footer */}
           <div className="mt-8 pt-6 border-t border-stone-200/60 flex flex-col items-center gap-4 select-none">
-            <div className="flex items-center justify-between w-full">
-              {/* Previous Page Link with Arrow */}
-              <button
-                onClick={onGoBack}
-                className="flex items-center gap-1.5 text-xs font-sans font-bold text-[#1B263B] hover:text-[#C5A059] transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4 text-[#DAA89B]" />
-                <span>Previous Page</span>
-              </button>
-
-              {/* Back to Top Anchor */}
-              <button
-                onClick={() => {
-                  const container = document.querySelector('.overflow-y-auto');
-                  if (container) {
-                    container.scrollTo({ top: 0, behavior: 'smooth' });
-                  }
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="flex items-center gap-1 text-xs font-sans font-bold text-[#C5A059] hover:text-[#1B263B] transition-colors cursor-pointer"
-                title="Back to Top"
-              >
-                <span>Back to Top</span>
-                <span className="text-sm font-semibold">↑</span>
-              </button>
-            </div>
             <p className="text-[10px] text-stone-400 font-sans tracking-wide">
               The Menopause Skincare Decoder • Est. 2026
             </p>

@@ -134,10 +134,7 @@ export default function SkinProfilerScreen({ onNavigate, onGoBack, userProfile, 
       className="flex flex-col min-h-full pb-8 bg-[#FAF9F6]"
     >
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30">
-        <div className="flex items-center gap-3">
-          <button onClick={onGoBack} className="p-1 text-stone-300 hover:text-white rounded-full">
-            <ArrowLeft className="w-6 h-6 text-[#DAA89B]" />
-          </button>
+        <div className="flex items-center">
           <span className="font-serif font-semibold text-lg text-white tracking-wide">My Skin Profile</span>
         </div>
         <button 

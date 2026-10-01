@@ -20,8 +20,11 @@ import NotesScreen from './components/NotesScreen';
 import SavedScansScreen from './components/SavedScansScreen';
 import SkinProfilerScreen from './components/SkinProfilerScreen';
 import WelcomeScreen from './components/WelcomeScreen';
+import RoutineBuilderScreen from './components/RoutineBuilderScreen';
+import UpgradeScreen from './components/UpgradeScreen';
+import InstallAppModal from './components/InstallAppModal';
 import HeaderMenu from './components/HeaderMenu';
-import { Screen, UserProfile } from './types';
+import { Screen, UserProfile, RoutineState, RoutineSlot } from './types';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
@@ -38,6 +41,9 @@ export default function App() {
       return { barrierType: null, concerns: [], recommendedIngredients: [] };
     }
   });
+
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [paymentSuccessToast, setPaymentSuccessToast] = useState(false);
 
   const handleUpdateProfile = React.useCallback((updates: Partial<UserProfile>) => {
     setUserProfile((prev) => {
@@ -59,14 +65,20 @@ export default function App() {
         newIngredients.some((ing, i) => ing !== prev.recommendedIngredients[i])
       );
 
-      if (!hasBarrierChange && !hasConcernsChange && !hasIngredientsChange) {
+      const hasProChange = updates.isPro !== undefined && updates.isPro !== prev.isPro;
+      const hasPlanChange = updates.planType !== undefined && updates.planType !== prev.planType;
+
+      if (!hasBarrierChange && !hasConcernsChange && !hasIngredientsChange && !hasProChange && !hasPlanChange) {
         return prev;
       }
 
-      const next = {
+      const next: UserProfile = {
         barrierType: updates.barrierType !== undefined ? updates.barrierType : prev.barrierType,
         concerns: newConcerns,
-        recommendedIngredients: newIngredients
+        recommendedIngredients: newIngredients,
+        isPro: updates.isPro !== undefined ? updates.isPro : prev.isPro,
+        planType: updates.planType !== undefined ? updates.planType : prev.planType,
+        purchasedAt: updates.purchasedAt !== undefined ? updates.purchasedAt : prev.purchasedAt
       };
 
       try {
@@ -78,6 +90,30 @@ export default function App() {
     });
   }, []);
 
+  // Listen for Stripe redirect parameters (?payment=success&session_id=...)
+  React.useEffect(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const paymentStatus = urlParams.get('payment');
+      const sessionId = urlParams.get('session_id');
+      const plan = (urlParams.get('plan') as any) || 'lifetime';
+
+      if (paymentStatus === 'success' && sessionId) {
+        handleUpdateProfile({
+          isPro: true,
+          planType: plan,
+          purchasedAt: new Date().toISOString()
+        });
+        setPaymentSuccessToast(true);
+        // Clean URL parameters cleanly without page refresh
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+    } catch (e) {
+      console.error('Error handling payment redirect:', e);
+    }
+  }, [handleUpdateProfile]);
+
   // Favorites State with localStorage persistence for safe, durable user sessions
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
@@ -87,6 +123,42 @@ export default function App() {
       return [];
     }
   });
+
+  // Routine State with localStorage persistence
+  const [routine, setRoutine] = useState<RoutineState>(() => {
+    try {
+      const saved = localStorage.getItem('boots_skin_decoder_routine');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const handleUpdateRoutine = (ingredientId: string, slot: RoutineSlot) => {
+    setRoutine((prev) => {
+      const updated = { ...prev };
+      if (slot === 'none') {
+        delete updated[ingredientId];
+      } else {
+        updated[ingredientId] = slot;
+      }
+      try {
+        localStorage.setItem('boots_skin_decoder_routine', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Failed to save routine to localStorage', err);
+      }
+      return updated;
+    });
+  };
+
+  const handleClearRoutine = () => {
+    setRoutine({});
+    try {
+      localStorage.removeItem('boots_skin_decoder_routine');
+    } catch (err) {
+      console.error('Failed to clear routine in localStorage', err);
+    }
+  };
 
   const handleToggleFavorite = (id: string) => {
     setFavorites((prev) => {
@@ -141,6 +213,8 @@ export default function App() {
         return (
           <HomeScreen 
             onNavigate={(screen) => navigateTo(screen)} 
+            isPro={userProfile.isPro}
+            onOpenInstallModal={() => setIsInstallModalOpen(true)}
           />
         );
         
@@ -259,6 +333,26 @@ export default function App() {
             }}
           />
         );
+
+      case 'routine_builder':
+        return (
+          <RoutineBuilderScreen
+            onNavigate={(screen) => {
+              if (screen === 'home') handleGoHome();
+              else navigateTo(screen);
+            }}
+            onGoBack={handleBack}
+            favorites={favorites}
+            routine={routine}
+            onUpdateRoutine={handleUpdateRoutine}
+            onClearRoutine={handleClearRoutine}
+            onToggleFavorite={handleToggleFavorite}
+            onSelectIngredient={(ingId) => {
+              setSelectedIngredientId(ingId);
+              navigateTo('ingredient_detail');
+            }}
+          />
+        );
         
       case 'skin_profiler':
         return (
@@ -285,6 +379,8 @@ export default function App() {
             }}
             onGoBack={handleBack}
             favorites={favorites}
+            routine={routine}
+            onUpdateRoutine={handleUpdateRoutine}
             onToggleFavorite={handleToggleFavorite}
             onSelectIngredient={(ingId) => {
               setSelectedIngredientId(ingId);
@@ -307,19 +403,55 @@ export default function App() {
             onGoBack={handleBack}
           />
         );
+
+      case 'upgrade':
+        return (
+          <UpgradeScreen
+            onGoBack={handleBack}
+            onNavigate={(screen) => {
+              if (screen === 'home') handleGoHome();
+              else navigateTo(screen);
+            }}
+            userProfile={userProfile}
+            onUpdateProfile={handleUpdateProfile}
+            onOpenInstallModal={() => setIsInstallModalOpen(true)}
+          />
+        );
         
       default:
-        return <HomeScreen onNavigate={(screen) => navigateTo(screen)} />;
+        return <HomeScreen onNavigate={(screen) => navigateTo(screen)} isPro={userProfile.isPro} onOpenInstallModal={() => setIsInstallModalOpen(true)} />;
     }
   };
 
   return (
     <PhoneContainer screen={currentScreen}>
+      {/* Payment Success Toast Celebration */}
+      {paymentSuccessToast && (
+        <div className="absolute top-3 left-4 right-4 z-50 p-4 rounded-2xl bg-gradient-to-r from-emerald-800 to-teal-900 text-white shadow-xl flex items-center justify-between animate-bounce">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🎉</span>
+            <div>
+              <span className="font-serif font-bold text-sm block">Welcome to Wise Bloom Pro!</span>
+              <span className="text-[11px] text-emerald-200">Full access unlocked. Thank you for your purchase.</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setPaymentSuccessToast(false)}
+            className="text-xs bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-lg text-white font-bold cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {currentScreen !== 'welcome' && (
         <HeaderMenu 
           currentScreen={currentScreen}
           onNavigate={navigateTo}
+          onGoBack={handleBack}
           hasBarrierQuizAnswers={Object.keys(quizAnswers).length > 0}
+          isPro={userProfile.isPro}
+          onOpenInstallModal={() => setIsInstallModalOpen(true)}
         />
       )}
       <div className="flex-1 relative overflow-hidden flex flex-col">
@@ -336,6 +468,12 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Mobile App Install Modal */}
+      <InstallAppModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+      />
     </PhoneContainer>
   );
 }

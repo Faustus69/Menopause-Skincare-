@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowLeft, 
@@ -19,23 +19,44 @@ import {
   Heart, 
   HelpCircle,
   FileCheck,
-  RefreshCw
+  RefreshCw,
+  ShieldAlert,
+  Sun,
+  Moon,
+  Check,
+  Plus
 } from 'lucide-react';
-import { Screen, UserProfile } from '../types';
+import { Screen, UserProfile, RoutineState, RoutineSlot } from '../types';
 import { INGREDIENTS_DATA } from '../data';
 import { Save } from 'lucide-react';
+import { checkRoutineConflicts, ConflictAlert } from '../utils/routineConflict';
 
 interface IngredientAnalysis {
   name: string;
+  role?: string;
   isMatchInDatabase: boolean;
   matchedIngredientId: string | null;
   percentage: string | null;
 }
 
+interface RoutineStepRecommendation {
+  stepNumber: number;
+  stepName: string;
+  productOrActive: string;
+  reason: string;
+}
+
 interface AnalysisResult {
   productName: string;
+  matchLevel?: 'Good Match' | 'Possible Match' | 'Use With Care';
+  routinePlacement?: string;
   ingredientsFound: IngredientAnalysis[];
   overallSummary: string;
+  layeringTip?: string;
+  isRecoveryModeRecommended?: boolean;
+  recoveryModeAdvice?: string;
+  suggestedAMRoutine?: RoutineStepRecommendation[];
+  suggestedPMRoutine?: RoutineStepRecommendation[];
   goodMatches: {
     ingredientNames: string[];
     bestFor: string;
@@ -50,6 +71,8 @@ interface ProductAnalyzerScreenProps {
   onNavigate: (screen: Screen) => void;
   onGoBack: () => void;
   favorites: string[];
+  routine?: RoutineState;
+  onUpdateRoutine?: (ingredientId: string, slot: RoutineSlot) => void;
   onToggleFavorite: (id: string) => void;
   onSelectIngredient: (id: string) => void;
   userProfile?: UserProfile;
@@ -59,6 +82,8 @@ export default function ProductAnalyzerScreen({
   onNavigate,
   onGoBack,
   favorites,
+  routine = {},
+  onUpdateRoutine,
   onToggleFavorite,
   onSelectIngredient,
   userProfile
@@ -66,6 +91,67 @@ export default function ProductAnalyzerScreen({
   
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [addedRoutineMessage, setAddedRoutineMessage] = useState<string | null>(null);
+
+  const handleQuickAddToRoutine = (ingredientId: string, slot: RoutineSlot, ingredientName: string) => {
+    if (onUpdateRoutine) {
+      onUpdateRoutine(ingredientId, slot);
+      setAddedRoutineMessage(`Added ${ingredientName} to your ${slot.toUpperCase()} routine!`);
+      setTimeout(() => setAddedRoutineMessage(null), 3500);
+    }
+  };
+
+  const getCompletePMRoutine = (
+    rawSteps?: RoutineStepRecommendation[],
+    productName?: string
+  ): RoutineStepRecommendation[] => {
+    const steps = rawSteps && rawSteps.length > 0 ? [...rawSteps] : [];
+
+    const cleanseStep = steps.find(s => /cleanse/i.test(s.stepName + ' ' + s.productOrActive)) || {
+      stepNumber: 1,
+      stepName: 'Gentle Cleanse',
+      productOrActive: 'Gentle hydrating or cream cleanser',
+      reason: 'Removes daytime SPF, pollutants, and debris without stripping natural barrier lipids.'
+    };
+
+    const hydrateStep = steps.find(s => /hydrat|sooth|glycerin|panthenol|hyaluronic/i.test(s.stepName + ' ' + s.productOrActive)) || {
+      stepNumber: 2,
+      stepName: 'Hydrating & Soothing Step',
+      productOrActive: 'Glycerin, Panthenol, or Hyaluronic Acid serum',
+      reason: 'Water-based humectants replenish dermal moisture before applying treatment actives.'
+    };
+
+    const activeStep = steps.find(s => 
+      /active|treatment|serum|retin|acid|peptid|glycolic|lactic|salicylic|niacinamide|bright/i.test(s.stepName + ' ' + s.productOrActive)
+    ) || steps[1] || {
+      stepNumber: 3,
+      stepName: 'Target Active Treatment',
+      productOrActive: productName ? `${productName} (One active only)` : 'One treatment active only (if skin is calm)',
+      reason: 'Introduce 1–3 nights weekly. Avoid layering conflicting retinoids or exfoliating acids.'
+    };
+
+    const barrierStep = steps.find(s => /barrier|ceramide|fatty acid|cholesterol/i.test(s.stepName + ' ' + s.productOrActive)) || {
+      stepNumber: 4,
+      stepName: 'Barrier Cream (Ceramides + Fatty Acids)',
+      productOrActive: 'Ceramides + Fatty Acids & Cholesterol',
+      reason: 'Essential physiological lipid replenishment to restore barrier architecture and lock in hydration.'
+    };
+
+    const moistureSealStep = steps.find(s => /seal|balm|squalane|oil|petrolatum|occlusive/i.test(s.stepName + ' ' + s.productOrActive)) || {
+      stepNumber: 5,
+      stepName: 'Moisture Seal / Balm (Squalane etc.)',
+      productOrActive: 'Squalane, facial oil, or lipid-rich barrier balm',
+      reason: 'Optional final layer to seal dry, tight, or flaky patches overnight against transepidermal water loss.'
+    };
+
+    return [
+      { ...cleanseStep, stepNumber: 1 },
+      { ...hydrateStep, stepNumber: 2 },
+      { ...activeStep, stepNumber: 3 },
+      { ...barrierStep, stepNumber: 4 },
+      { ...moistureSealStep, stepNumber: 5 }
+    ];
+  };
 
   const handleSaveScan = async () => {
     if (!result) return;
@@ -104,20 +190,13 @@ export default function ProductAnalyzerScreen({
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-
-  const triggerCameraClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    cameraInputRef.current?.click();
-  };
-
   // Dynamic comforting system message scheduler to enrich the loading state
   const startLoadingMessages = () => {
     const steps = [
       'Reading and OCR scanning your product label...',
       'Isolating active compound names from carrier fluids...',
       'Analysing concentrations and matching our 45+ database...',
+      'Evaluating active combinations against your routine...',
       'Generating menopause compatibility scores...'
     ];
     let i = 0;
@@ -173,13 +252,6 @@ export default function ProductAnalyzerScreen({
     }
   };
 
-  const triggerUploadClick = (e?: React.MouseEvent) => {
-    if (e) {
-      e.stopPropagation();
-    }
-    fileInputRef.current?.click();
-  };
-
   // Perform Gemini AI Request
   const handleAnalyze = async () => {
     setError('');
@@ -189,7 +261,7 @@ export default function ProductAnalyzerScreen({
     const loaderInterval = startLoadingMessages();
 
     try {
-      const payload: { text?: string; image?: string; userProfile?: any } = {};
+      const payload: { text?: string; image?: string; userProfile?: any; routine?: any } = {};
       if (activeTab === 'upload') {
         if (!imageBase64) {
           setError('Please take or upload an image of the labels first.');
@@ -199,6 +271,7 @@ export default function ProductAnalyzerScreen({
         }
         payload.image = imageBase64;
         payload.userProfile = userProfile;
+        payload.routine = routine;
       } else {
         if (!rawText.trim()) {
           setError('Please paste list of ingredients first.');
@@ -207,7 +280,8 @@ export default function ProductAnalyzerScreen({
           return;
         }
         payload.text = rawText;
-      payload.userProfile = userProfile;
+        payload.userProfile = userProfile;
+        payload.routine = routine;
       }
 
       const response = await fetch('/api/analyze-ingredients', {
@@ -218,7 +292,7 @@ export default function ProductAnalyzerScreen({
         body: JSON.stringify(payload)
       });
 
-            let data;
+      let data;
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.indexOf("application/json") !== -1) {
         data = await response.json();
@@ -248,6 +322,33 @@ export default function ProductAnalyzerScreen({
     setRawText('');
     setResult(null);
     setError('');
+    setAddedRoutineMessage(null);
+  };
+
+  // Routine conflict calculation for current scanned result
+  const scannedIngredientNames = result?.ingredientsFound ? result.ingredientsFound.map(i => i.name) : [];
+  const routineConflicts: ConflictAlert[] = checkRoutineConflicts(scannedIngredientNames, routine);
+
+  const handleRoutineToggle = (ingId: string, slot: RoutineSlot) => {
+    if (!onUpdateRoutine) return;
+    const currentSlot = routine[ingId];
+    let newSlot: RoutineSlot = slot;
+    if (currentSlot === slot) {
+      newSlot = 'none';
+    } else if ((currentSlot === 'am' && slot === 'pm') || (currentSlot === 'pm' && slot === 'am')) {
+      newSlot = 'both';
+    }
+
+    onUpdateRoutine(ingId, newSlot);
+
+    const ingObj = INGREDIENTS_DATA.find(i => i.id === ingId);
+    const ingName = ingObj ? ingObj.ingredient : ingId;
+    if (newSlot === 'none') {
+      setAddedRoutineMessage(`Removed ${ingName} from routine.`);
+    } else {
+      setAddedRoutineMessage(`Updated ${ingName} in your ${newSlot.toUpperCase()} routine!`);
+    }
+    setTimeout(() => setAddedRoutineMessage(null), 3500);
   };
 
   return (
@@ -260,26 +361,9 @@ export default function ProductAnalyzerScreen({
     >
       {/* Sticky Header */}
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 border-b border-stone-200/10 select-none">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onGoBack}
-            className="p-1 text-stone-300 hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-            id="ana_back_btn"
-            title="Go Back"
-          >
-            <ArrowLeft className="w-6 h-6 text-[#DAA89B]" />
-          </button>
+        <div className="flex items-center">
           <span className="font-serif font-semibold text-base tracking-wide text-white">Smart Label Decoder</span>
         </div>
-        
-        <button 
-          onClick={() => onNavigate('home')}
-          className="p-1 text-stone-300 hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-          id="ana_home_btn"
-          title="Home"
-        >
-          <Home className="w-5 h-5 text-[#DAA89B]" />
-        </button>
       </div>
 
       <div className="p-6 bg-[#FAF9F6] flex-1 flex flex-col justify-between">
@@ -410,32 +494,91 @@ export default function ProductAnalyzerScreen({
               >
                 {/* Result Title */}
                 <div className="bg-white border border-[#E2B4BD]/30 rounded-2xl p-5 shadow-3xs">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] text-[#DAA89B] font-bold tracking-widest uppercase font-mono">
-                      Detected Skincare Product
-                    </span>
+                  <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-[#DAA89B] font-bold tracking-widest uppercase font-mono">
+                        Detected Product
+                      </span>
+                      {result.matchLevel && (
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold tracking-wide uppercase font-sans flex items-center gap-1 ${
+                          result.matchLevel === 'Good Match'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : result.matchLevel === 'Possible Match'
+                            ? 'bg-sky-100 text-sky-800 border border-sky-300'
+                            : 'bg-amber-100 text-amber-900 border border-amber-300'
+                        }`}>
+                          {result.matchLevel === 'Good Match' && <CheckCircle className="w-3 h-3 text-emerald-600" />}
+                          {result.matchLevel === 'Possible Match' && <Sparkles className="w-3 h-3 text-sky-600" />}
+                          {result.matchLevel === 'Use With Care' && <AlertTriangle className="w-3 h-3 text-amber-700" />}
+                          <span>{result.matchLevel}</span>
+                        </span>
+                      )}
+                    </div>
                     
-                    <button
-                      onClick={handleSaveScan}
-                      disabled={isSaving || saveSuccess}
-                      className={`text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${saveSuccess ? 'text-emerald-600' : 'text-[#1B263B] hover:text-[#C5A059]'}`}
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>{saveSuccess ? 'Saved!' : isSaving ? 'Saving...' : 'Save Scan'}</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={handleSaveScan}
+                        disabled={isSaving || saveSuccess}
+                        className={`text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${saveSuccess ? 'text-emerald-600' : 'text-[#1B263B] hover:text-[#C5A059]'}`}
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>{saveSuccess ? 'Saved!' : isSaving ? 'Saving...' : 'Save Scan'}</span>
+                      </button>
 
-                    <button
-                      onClick={resetAnalyzer}
-                      className="text-xs font-bold text-[#C5A059] hover:text-[#1B263B] transition-colors flex items-center gap-1 cursor-pointer"
-                      id="reset_btn"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Scan Another</span>
-                    </button>
+                      <button
+                        onClick={resetAnalyzer}
+                        className="text-xs font-bold text-[#C5A059] hover:text-[#1B263B] transition-colors flex items-center gap-1 cursor-pointer"
+                        id="reset_btn"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Scan Another</span>
+                      </button>
+                    </div>
                   </div>
                   <h3 className="text-xl font-serif font-medium text-[#1B263B] leading-snug">
                     {result.productName}
                   </h3>
+
+                  {/* Routine Placement Recommendation */}
+                  {result.routinePlacement && (
+                    <div className="mt-2.5 px-3 py-1.5 bg-[#FAF9F6] border border-[#556953]/20 rounded-xl flex items-center gap-2 text-xs text-[#556953] font-sans font-medium">
+                      <span className="font-bold text-[#1B263B] uppercase tracking-wider text-[10px]">Routine Fit:</span>
+                      <span>{result.routinePlacement}</span>
+                    </div>
+                  )}
+
+                  {/* Recovery Mode Guidance Banner if recommended */}
+                  {(result.isRecoveryModeRecommended || (userProfile?.concerns && userProfile.concerns.some(c => ['stinging', 'burning', 'irritation', 'redness'].includes(c.toLowerCase())))) && (
+                    <div className="mt-3.5 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs font-sans text-rose-900">
+                      <div className="flex items-center gap-2 font-bold text-rose-950 mb-1">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>Recovery Mode Active</span>
+                      </div>
+                      <p className="leading-relaxed text-[11.5px] text-rose-800">
+                        {result.recoveryModeAdvice || "Your skin sounds reactive today, so keep the routine simple. Pause retinoids, exfoliating acids, strong vitamin C, kojic acid, and harsh breakout treatments for now. Focus on hydration, soothing, and barrier repair."}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Toast notification when ingredient added to routine */}
+                  {addedRoutineMessage && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-3 p-3 bg-[#556953] text-white text-xs font-sans rounded-xl font-semibold flex items-center justify-between shadow-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-300" />
+                        <span>{addedRoutineMessage}</span>
+                      </div>
+                      <button 
+                        onClick={() => onNavigate('routine_builder')} 
+                        className="text-[11px] underline font-normal hover:text-stone-200 cursor-pointer"
+                      >
+                        View Regimen
+                      </button>
+                    </motion.div>
+                  )}
 
                   {/* Profile Compatibility Section */}
                   {result.goodMatches && result.goodMatches.ingredientNames.length > 0 && (
@@ -452,17 +595,62 @@ export default function ProductAnalyzerScreen({
                     </div>
                   )}
 
-                  {result.useWithCare && result.useWithCare.ingredientNames.length > 0 && (
-                    <div className="mt-3 p-4 bg-rose-50 border border-rose-200 rounded-xl">
-                      <span className="text-[10px] text-rose-800 font-bold tracking-widest uppercase font-sans flex items-center gap-1.5">
-                        <AlertTriangle className="w-3.5 h-3.5" /> Use with care
-                      </span>
-                      <p className="text-sm font-bold text-rose-900 mt-2">
-                        Also contains: {result.useWithCare.ingredientNames.join(', ')}
-                      </p>
-                      <p className="text-xs text-rose-700 mt-1">
-                        <span className="font-semibold">Reason:</span> {result.useWithCare.reason}
-                      </p>
+                  {/* PROMINENT USE WITH CARE ALERT SYSTEM */}
+                  {(routineConflicts.length > 0 || (result.useWithCare && result.useWithCare.ingredientNames.length > 0)) && (
+                    <div className="mt-4 p-4.5 bg-amber-50/90 border-2 border-amber-300 rounded-2xl shadow-3xs flex flex-col gap-3 font-sans select-text" id="use_with_care_alert_box">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-amber-100 text-amber-800 rounded-xl shrink-0">
+                          <ShieldAlert className="w-5 h-5 text-amber-700" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-amber-800 font-bold tracking-widest uppercase block font-sans">
+                            Use With Care • Routine Compatibility Alert
+                          </span>
+                          <h4 className="text-xs font-bold text-amber-950 mt-0.5">
+                            Mindful Active Pairing Guidance
+                          </h4>
+                        </div>
+                      </div>
+
+                      {/* Routine conflict specific warnings */}
+                      {routineConflicts.length > 0 && (
+                        <div className="flex flex-col gap-2 mt-1 border-t border-amber-200/70 pt-3">
+                          {routineConflicts.map((conflict, idx) => (
+                            <div key={idx} className="bg-white p-3.5 rounded-xl border border-amber-200/90 text-xs shadow-3xs">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-bold text-amber-950 text-xs flex items-center gap-1">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  {conflict.title}
+                                </span>
+                                {conflict.routineSlot && (
+                                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 text-[9px] font-bold rounded uppercase">
+                                    In your {conflict.routineSlot} Routine
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-amber-900 font-medium leading-relaxed text-[11.5px] mt-1">
+                                {conflict.reason}
+                              </p>
+                              <div className="mt-2.5 p-2.5 bg-amber-50/80 rounded-lg text-[11px] text-amber-850 leading-relaxed font-sans border border-amber-200/60">
+                                <strong className="font-bold text-amber-950 block mb-0.5">Gentle Advisory:</strong>
+                                {conflict.reassuringAdvice}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Product-specific useWithCare items from AI */}
+                      {result.useWithCare && result.useWithCare.ingredientNames.length > 0 && (
+                        <div className="bg-white p-3.5 rounded-xl border border-amber-200/90 text-xs shadow-3xs">
+                          <span className="font-bold text-amber-950 block mb-1">
+                            Scanned Actives to Note: {result.useWithCare.ingredientNames.join(', ')}
+                          </span>
+                          <p className="text-amber-900 leading-relaxed text-[11.5px]">
+                            {result.useWithCare.reason}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -479,15 +667,229 @@ export default function ProductAnalyzerScreen({
                   </p>
                 </div>
 
-                {/* Detected Ingredients Section */}
-                <div>
-                  <h4 className="text-xs text-[#1B263B] font-bold tracking-wider font-sans mb-3 select-none">
-                    Detected Active Ingredients ({result.ingredientsFound.length})
+                {/* Layering Tip & Menopause Layering Rules */}
+                <div className="bg-[#FAF9F6] border border-[#C5A059]/30 rounded-2xl p-5 shadow-3xs">
+                  <h4 className="text-xs text-[#C5A059] font-bold tracking-widest uppercase font-sans mb-2 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-[#C5A059]" />
+                    <span>Layering Guidance & Rules</span>
                   </h4>
+
+                  {result.layeringTip && (
+                    <div className="p-3 bg-white border border-[#C5A059]/20 rounded-xl mb-3 text-xs text-[#1B263B] font-sans">
+                      <span className="font-bold text-[#C5A059] block mb-0.5">Product Layering Tip:</span>
+                      <p className="text-stone-700 leading-relaxed text-[11.5px]">{result.layeringTip}</p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2 text-[11.5px] font-sans text-stone-600 leading-relaxed border-t border-stone-200/60 pt-3">
+                    <div className="flex items-start gap-2">
+                      <span className="text-[#556953] font-bold text-xs mt-0.5">✓</span>
+                      <span><strong>Lightest to richest:</strong> Serums & water hydrators first, then treatment actives, then moisturiser, followed by oils/balms. SPF always goes last in the AM.</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-[#556953] font-bold text-xs mt-0.5">✓</span>
+                      <span><strong>One strong active at a time:</strong> Avoid combining retinoids with exfoliating acids in the same routine, especially on dry, sensitive, or menopausal barrier-impaired skin.</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Suggested AM / PM Routine Steps if provided */}
+                {((result.suggestedAMRoutine && result.suggestedAMRoutine.length > 0) || (result.suggestedPMRoutine && result.suggestedPMRoutine.length > 0)) && (
+                  <div className="bg-white border border-stone-200/80 rounded-2xl p-5 shadow-3xs flex flex-col gap-4">
+                    <h4 className="text-xs text-[#556953] font-bold tracking-widest uppercase font-sans flex items-center gap-1.5">
+                      <CheckCircle className="w-4 h-4 text-[#556953]" />
+                      <span>Suggested Step-by-Step Regimen</span>
+                    </h4>
+
+                    {result.suggestedAMRoutine && result.suggestedAMRoutine.length > 0 && (
+                      <div className="border border-amber-200/70 bg-amber-50/40 rounded-xl p-3.5">
+                        <span className="text-[11px] font-bold font-sans text-amber-900 uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                          <Sun className="w-3.5 h-3.5 text-amber-600" /> Morning (AM) Layering Order
+                        </span>
+                        <div className="flex flex-col gap-2">
+                          {result.suggestedAMRoutine.map((step, idx) => (
+                            <div key={idx} className="flex items-start gap-2 text-xs font-sans">
+                              <span className="w-5 h-5 rounded-full bg-amber-200/70 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                                {step.stepNumber}
+                              </span>
+                              <div>
+                                <span className="font-bold text-stone-900">{step.stepName}: </span>
+                                <span className="text-[#556953] font-semibold">{step.productOrActive}</span>
+                                <p className="text-[11px] text-stone-600 leading-snug mt-0.5">{step.reason}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Evening PM Layering Order: Full 5-Step Protocol */}
+                    {(() => {
+                      const pmSteps = getCompletePMRoutine(result.suggestedPMRoutine, result.productName);
+                      return (
+                        <div className="border border-indigo-200/80 bg-indigo-50/50 rounded-xl p-3.5 flex flex-col gap-2.5">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <span className="text-[11.5px] font-bold font-sans text-indigo-950 uppercase tracking-wide flex items-center gap-1.5">
+                              <Moon className="w-3.5 h-3.5 text-indigo-600" /> Evening (PM) Layering Order (5 Steps)
+                            </span>
+                            <span className="text-[10px] bg-indigo-200/70 text-indigo-900 font-bold px-2 py-0.5 rounded-full font-mono">
+                              Sequential Protocol
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col gap-2.5">
+                            {pmSteps.map((step, idx) => {
+                              const isBarrierStep = step.stepNumber === 4 || /barrier|ceramide|fatty/i.test(step.stepName);
+                              const isSealStep = step.stepNumber === 5 || /seal|balm|squalane|oil/i.test(step.stepName);
+                              const isActiveStep = step.stepNumber === 3 || /active|treatment/i.test(step.stepName);
+
+                              return (
+                                <div 
+                                  key={idx} 
+                                  className={`flex items-start gap-2.5 text-xs font-sans p-2 rounded-lg transition-colors ${
+                                    isBarrierStep 
+                                      ? 'bg-emerald-50/80 border border-emerald-200/60' 
+                                      : isSealStep 
+                                      ? 'bg-amber-50/80 border border-amber-200/60' 
+                                      : isActiveStep
+                                      ? 'bg-indigo-100/50 border border-indigo-200/60'
+                                      : 'bg-white/70'
+                                  }`}
+                                >
+                                  <span className={`w-5 h-5 rounded-full font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5 ${
+                                    isBarrierStep 
+                                      ? 'bg-emerald-200 text-emerald-900' 
+                                      : isSealStep 
+                                      ? 'bg-amber-200 text-amber-900' 
+                                      : 'bg-indigo-200/80 text-indigo-900'
+                                  }`}>
+                                    {step.stepNumber}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-bold text-stone-900">{step.stepName}: </span>
+                                      <span className="text-indigo-950 font-semibold">{step.productOrActive}</span>
+                                      {isBarrierStep && (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                          Barrier Step
+                                        </span>
+                                      )}
+                                      {isSealStep && (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                          Moisture Seal
+                                        </span>
+                                      )}
+                                      {isActiveStep && (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 border border-indigo-300">
+                                          Active Treatment
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-stone-600 leading-snug mt-0.5">{step.reason}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Menopausal Protocol Action Shortcuts */}
+                          <div className="mt-1 pt-2.5 border-t border-indigo-200/70 flex flex-col gap-1.5">
+                            <span className="text-[10.5px] text-indigo-900 font-medium">
+                              Need to complete Steps 4 & 5 in your Evening routine?
+                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <button
+                                onClick={() => handleQuickAddToRoutine('ceramides', 'pm', 'Ceramides')}
+                                className="px-2.5 py-1.5 bg-[#556953] text-white text-[10.5px] font-bold rounded-lg shadow-3xs hover:bg-[#435341] transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3" /> Add Step 4: Ceramides
+                              </button>
+                              <button
+                                onClick={() => handleQuickAddToRoutine('squalane', 'pm', 'Squalane')}
+                                className="px-2.5 py-1.5 bg-[#556953] text-white text-[10.5px] font-bold rounded-lg shadow-3xs hover:bg-[#435341] transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3" /> Add Step 5: Squalane
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* Detected Ingredients Section */}
+                <div id="detected_ingredients_section">
+                  <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                    <h4 className="text-xs text-[#1B263B] font-bold tracking-wider font-sans select-none">
+                      Detected Active Ingredients ({result.ingredientsFound.length})
+                    </h4>
+                    <span className="text-[10px] font-bold font-sans uppercase tracking-wider text-indigo-900 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded-full">
+                      Step 3: Target Treatment Fit
+                    </span>
+                  </div>
+
+                  {/* Evening Protocol Context Notice */}
+                  {(() => {
+                    const hasBarrierInProduct = result.ingredientsFound.some(i => 
+                      /ceramide|fatty acid|cholesterol/i.test(i.name)
+                    );
+                    const hasSealInProduct = result.ingredientsFound.some(i => 
+                      /squalane|balm|oil|petrolatum/i.test(i.name)
+                    );
+
+                    if (!hasBarrierInProduct || !hasSealInProduct) {
+                      return (
+                        <div className="mb-3.5 p-3.5 bg-amber-50/80 border border-amber-200/90 rounded-xl text-amber-950 text-xs font-sans shadow-3xs">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <span className="font-bold block text-[11.5px] text-amber-950">
+                                Evening Protocol Sequence Check
+                              </span>
+                              <p className="text-[11px] text-amber-900 mt-0.5 leading-snug">
+                                Only {result.ingredientsFound.length} active ingredient{result.ingredientsFound.length === 1 ? '' : 's'} detected in this product, which correspond to your evening <strong>Step 3 (Target Active Treatment)</strong>.
+                              </p>
+                              <p className="text-[11px] text-amber-900 font-semibold mt-1">
+                                Notice: There is no Barrier cream (ceramides + fatty acids) and no Moisture seal/Balm (squalane etc) in this scanned product.
+                              </p>
+                              <p className="text-[10.5px] text-stone-600 mt-1 leading-relaxed">
+                                For menopausal skin, active treatments must always be sealed with lipid barrier restoration (Step 4) and an optional moisture seal (Step 5) to prevent trans-epidermal water loss and irritation.
+                              </p>
+                              <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                                {!hasBarrierInProduct && (
+                                  <button
+                                    onClick={() => handleQuickAddToRoutine('ceramides', 'pm', 'Ceramides')}
+                                    className="px-2.5 py-1 bg-[#556953] text-white text-[10.5px] font-bold rounded-lg shadow-3xs hover:bg-[#435341] transition-all flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Plus className="w-3 h-3" /> Add Step 4: Ceramides to PM
+                                  </button>
+                                )}
+                                {!hasSealInProduct && (
+                                  <button
+                                    onClick={() => handleQuickAddToRoutine('squalane', 'pm', 'Squalane')}
+                                    className="px-2.5 py-1 bg-[#556953] text-white text-[10.5px] font-bold rounded-lg shadow-3xs hover:bg-[#435341] transition-all flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Plus className="w-3 h-3" /> Add Step 5: Squalane to PM
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   <div className="flex flex-col gap-3">
                     {result.ingredientsFound.map((ing, k) => {
                       const isFavorited = ing.matchedIngredientId ? favorites.includes(ing.matchedIngredientId) : false;
+                      const matchedId = ing.matchedIngredientId;
+                      const dbRecord = matchedId ? INGREDIENTS_DATA.find(i => i.id === matchedId) : null;
+                      const roleDisplay = ing.role || dbRecord?.role;
+                      const currentSlot = matchedId ? routine[matchedId] : undefined;
+
                       return (
                         <div 
                           key={k}
@@ -504,37 +906,79 @@ export default function ProductAnalyzerScreen({
                                 {ing.name}
                                 {ing.percentage && <span className="text-[#DAA89B] font-mono text-xs ml-1">({ing.percentage})</span>}
                               </span>
+                              {roleDisplay && (
+                                <span className="px-2 py-0.5 bg-[#556953]/10 text-[#556953] border border-[#556953]/20 rounded-full text-[9.5px] font-bold uppercase tracking-wider font-sans">
+                                  {roleDisplay}
+                                </span>
+                              )}
                               {ing.isMatchInDatabase && (
                                 <span className="px-1.5 py-0.5 bg-[#FAF9F6] border border-[#C5A059]/20 text-[#C5A059] rounded text-[9px] font-semibold tracking-wider font-sans">
-                                  In App Database
+                                  In Database
                                 </span>
                               )}
                             </div>
-
-                            
                           </div>
+
                           {/* Matching action buttons */}
-                          <div className="mt-4 pt-3 border-t border-stone-50 flex items-center justify-between">
-                            {ing.isMatchInDatabase && ing.matchedIngredientId ? (
-                              <>
+                          <div className="mt-4 pt-3 border-t border-stone-100 flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between">
+                              {ing.isMatchInDatabase && ing.matchedIngredientId ? (
+                                <>
+                                  <button
+                                    onClick={() => onSelectIngredient(ing.matchedIngredientId!)}
+                                    className="inline-flex items-center gap-1 text-[11px] font-sans font-bold text-[#1B263B] hover:text-[#C5A059] cursor-pointer"
+                                    title="View original science card"
+                                  >
+                                    <span>View study card</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <button
+                                    onClick={() => onToggleFavorite(ing.matchedIngredientId!)}
+                                    className="p-1 text-[#C5A059] hover:bg-rose-50 rounded-lg transition-all cursor-pointer flex flex-col items-center gap-0.5"
+                                    title={isFavorited ? "Remove from Favorites" : "Save to Favorites"}
+                                  >
+                                    <Heart className={`w-4 h-4 ${isFavorited ? 'fill-[#C5A059] text-[#C5A059]' : 'text-stone-400'}`} />
+                                    <span className={`text-[9px] font-sans font-bold leading-none ${isFavorited ? 'text-[#C5A059]' : 'text-stone-500'}`}>
+                                      {isFavorited ? 'Saved' : 'Save'}
+                                    </span>
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-stone-400 font-sans italic">No direct database match</span>
+                              )}
+                            </div>
+
+                            {/* Quick AM / PM Routine Assignment Buttons */}
+                            {ing.isMatchInDatabase && ing.matchedIngredientId && onUpdateRoutine && (
+                              <div className="flex items-center gap-2 pt-1 border-t border-stone-50">
+                                <span className="text-[10px] text-stone-400 font-sans font-bold uppercase tracking-wider">
+                                  Add to Routine:
+                                </span>
                                 <button
-                                  onClick={() => onSelectIngredient(ing.matchedIngredientId!)}
-                                  className="inline-flex items-center gap-1 text-[11px] font-sans font-bold text-[#1B263B] hover:text-[#C5A059] cursor-pointer"
-                                  title="View original science card"
+                                  onClick={() => handleRoutineToggle(ing.matchedIngredientId!, 'am')}
+                                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold font-sans flex items-center gap-1 transition-all cursor-pointer ${
+                                    currentSlot === 'am' || currentSlot === 'both'
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                      : 'bg-stone-100 hover:bg-amber-50 text-stone-600 hover:text-amber-800 border border-stone-200'
+                                  }`}
                                 >
-                                  <span>View original study card</span>
-                                  <ChevronRight className="w-3.5 h-3.5" />
+                                  <Sun className="w-3 h-3 text-amber-600" />
+                                  <span>AM {currentSlot === 'am' || currentSlot === 'both' ? '✓' : ''}</span>
                                 </button>
 
                                 <button
-                                  onClick={() => onToggleFavorite(ing.matchedIngredientId!)}
-                                  className="p-1.5 text-[#C5A059] hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                                  onClick={() => handleRoutineToggle(ing.matchedIngredientId!, 'pm')}
+                                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold font-sans flex items-center gap-1 transition-all cursor-pointer ${
+                                    currentSlot === 'pm' || currentSlot === 'both'
+                                      ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+                                      : 'bg-stone-100 hover:bg-indigo-50 text-stone-600 hover:text-indigo-800 border border-stone-200'
+                                  }`}
                                 >
-                                  <Heart className={`w-5 h-5 ${isFavorited ? 'fill-[#C5A059]' : ''}`} />
+                                  <Moon className="w-3 h-3 text-indigo-600" />
+                                  <span>PM {currentSlot === 'pm' || currentSlot === 'both' ? '✓' : ''}</span>
                                 </button>
-                              </>
-                            ) : (
-                              <span className="text-[10px] text-stone-400 font-sans italic">No direct database match</span>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -575,8 +1019,6 @@ export default function ProductAnalyzerScreen({
                             : 'border-[#E2B4BD]/50 bg-white hover:border-[#C5A059]'
                       }`}
                     >
-                      
-
                       {imagePreviewUrl ? (
                         <div className="flex flex-col items-center gap-3 w-full">
                           <div className="w-24 h-24 border border-stone-200 rounded-xl overflow-hidden shadow-xs relative bg-white flex items-center justify-center">
@@ -595,8 +1037,27 @@ export default function ProductAnalyzerScreen({
                           </div>
                           
                           <div className="flex gap-2 mt-2">
-                            <div className="relative overflow-hidden py-1.5 px-3 bg-[#1B263B] text-white text-[10px] font-bold rounded-lg cursor-pointer hover:bg-[#253447]">Retake Photo<input type="file" onChange={handleFileChange} accept="image/*" capture="environment" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /></div>
-                            <div className="relative overflow-hidden py-1.5 px-3 bg-white border border-stone-200 text-stone-600 text-[10px] font-bold rounded-lg cursor-pointer hover:text-[#1B263B]">Replace from Gallery<input type="file" onChange={handleFileChange} accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /></div>
+                            <label className="py-1.5 px-3 bg-[#1B263B] text-white text-[10px] font-bold rounded-lg cursor-pointer hover:bg-[#253447] active:scale-95 transition-all flex items-center gap-1 shadow-3xs">
+                              <Camera className="w-3 h-3" />
+                              <span>Retake Photo</span>
+                              <input 
+                                type="file" 
+                                onChange={handleFileChange} 
+                                accept="image/*" 
+                                capture="environment" 
+                                className="hidden" 
+                              />
+                            </label>
+                            <label className="py-1.5 px-3 bg-white border border-stone-200 text-stone-600 hover:text-[#1B263B] text-[10px] font-bold rounded-lg cursor-pointer active:scale-95 transition-all flex items-center gap-1 shadow-3xs">
+                              <Upload className="w-3 h-3 text-[#DAA89B]" />
+                              <span>Replace from Gallery</span>
+                              <input 
+                                type="file" 
+                                onChange={handleFileChange} 
+                                accept="image/*" 
+                                className="hidden" 
+                              />
+                            </label>
                           </div>
                         </div>
                       ) : (
@@ -613,11 +1074,38 @@ export default function ProductAnalyzerScreen({
                             </span>
                           </div>
                           <div className="flex items-center gap-2.5 mt-3.5 flex-wrap justify-center w-full max-w-[280px]">
-                            {/* Option 1: Live camera snap of labels */}
-                            <div className="relative overflow-hidden flex-1 py-2.5 px-4 bg-[#1B263B] text-white hover:bg-[#253447] text-[11px] font-bold rounded-xl shadow-3xs cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1.5"><Camera className="w-3.5 h-3.5 stroke-[2]" /><span>Take Photo</span><input type="file" onChange={handleFileChange} accept="image/*" capture="environment" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /></div>
+                            {/* Option 1: Live camera snap of labels using native capture */}
+                            <label 
+                              className="flex-1 py-2.5 px-4 bg-[#1B263B] text-white hover:bg-[#253447] text-[11px] font-bold rounded-xl shadow-3xs cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                              id="take_photo_btn"
+                            >
+                              <Camera className="w-3.5 h-3.5 stroke-[2]" />
+                              <span>Take Photo</span>
+                              <input 
+                                type="file" 
+                                onChange={handleFileChange} 
+                                accept="image/*" 
+                                capture="environment" 
+                                className="hidden" 
+                                id="take_photo_input"
+                              />
+                            </label>
 
                             {/* Option 2: Gallery file picker */}
-                            <div className="relative overflow-hidden flex-1 py-2.5 px-4 bg-white border border-[#E2B4BD] text-[#1B263B] hover:text-[#C5A059] text-[11px] font-bold rounded-xl shadow-3xs cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1.5"><Upload className="w-3.5 h-3.5 text-[#DAA89B]" /><span>Browse Files</span><input type="file" onChange={handleFileChange} accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /></div>
+                            <label 
+                              className="flex-1 py-2.5 px-4 bg-white border border-[#E2B4BD] text-[#1B263B] hover:text-[#C5A059] text-[11px] font-bold rounded-xl shadow-3xs cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                              id="browse_files_label"
+                            >
+                              <Upload className="w-3.5 h-3.5 text-[#DAA89B]" />
+                              <span>Browse Files</span>
+                              <input 
+                                type="file" 
+                                onChange={handleFileChange} 
+                                accept="image/*" 
+                                className="hidden" 
+                                id="browse_files_input"
+                              />
+                            </label>
                           </div>
                         </div>
                       )}
@@ -672,17 +1160,7 @@ export default function ProductAnalyzerScreen({
 
         {/* Outer bottom layout standard styling footer */}
         <div className="mt-12 pt-6 border-t border-stone-100 flex flex-col items-center gap-4 select-none">
-          <div className="flex items-center justify-between w-full">
-            {/* Nav back anchor linkage */}
-            <button
-              onClick={onGoBack}
-              className="flex items-center gap-1.5 text-xs font-sans font-bold text-[#1B263B] hover:text-[#C5A059] transition-colors cursor-pointer"
-              id="ana_footer_back"
-            >
-              <ArrowLeft className="w-4 h-4 text-[#DAA89B]" />
-              <span>Previous Page</span>
-            </button>
-
+          <div className="flex items-center justify-end w-full">
             {/* Top scrolling anchor widget */}
             <button
               onClick={() => {

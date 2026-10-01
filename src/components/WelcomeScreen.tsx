@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Leaf, Camera, ShoppingBag, ChevronRight, ArrowDown } from 'lucide-react';
+import { ArrowRight, Leaf, Camera, ShoppingBag, ArrowDown } from 'lucide-react';
 import { Screen } from '../types';
 
 interface WelcomeScreenProps {
@@ -57,7 +57,6 @@ export default function WelcomeScreen({ onNavigate }: WelcomeScreenProps) {
                   Your skin has changed<br />Discover what it needs today
                 </p>
               </div>
-              <ChevronRight className="w-6 h-6 text-[#6D8A68] shrink-0" strokeWidth={1.5} />
             </div>
             {/* Down Arrow separator */}
             <div className="absolute -bottom-[22px] left-1/2 -translate-x-1/2 w-8 h-8 bg-[#F6F4EE] rounded-full flex items-center justify-center shadow-sm border border-[#EBE7DF] z-20">
@@ -69,8 +68,20 @@ export default function WelcomeScreen({ onNavigate }: WelcomeScreenProps) {
 
           {/* Card 2 */}
           <div className="relative">
-            <div className="bg-[#FEF9F8] rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-[#F2E8E6] flex items-center gap-4 relative z-10">
-              <div className="w-[72px] h-[72px] rounded-full bg-[#C27E77] flex items-center justify-center shrink-0">
+            <div 
+              id="welcome_card_my_scan"
+              role="button"
+              tabIndex={0}
+              onClick={() => onNavigate('product_analyzer')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onNavigate('product_analyzer');
+                }
+              }}
+              className="bg-[#FEF9F8] hover:bg-[#FDF2F0] rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-md border border-[#F2E8E6] hover:border-[#C27E77] flex items-center gap-4 relative z-10 cursor-pointer transition-all duration-200 active:scale-[0.98] select-none group"
+            >
+              <div className="w-[72px] h-[72px] rounded-full bg-[#C27E77] flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
                 <Camera className="w-8 h-8 stroke-[1.5] text-white" />
               </div>
               <div className="flex-1 pt-1">
@@ -82,10 +93,9 @@ export default function WelcomeScreen({ onNavigate }: WelcomeScreenProps) {
                   Photograph an ingredients<br />list and uncover the truth—<br />not the hype
                 </p>
               </div>
-              <ChevronRight className="w-6 h-6 text-[#C27E77] shrink-0" strokeWidth={1.5} />
             </div>
             {/* Down Arrow separator */}
-            <div className="absolute -bottom-[22px] left-1/2 -translate-x-1/2 w-8 h-8 bg-[#FEF9F8] rounded-full flex items-center justify-center shadow-sm border border-[#F2E8E6] z-20">
+            <div className="absolute -bottom-[22px] left-1/2 -translate-x-1/2 w-8 h-8 bg-[#FEF9F8] rounded-full flex items-center justify-center shadow-sm border border-[#F2E8E6] z-20 pointer-events-none">
               <ArrowDown className="w-4 h-4 text-[#8C9C8A]" strokeWidth={2} />
             </div>
           </div>
@@ -107,7 +117,6 @@ export default function WelcomeScreen({ onNavigate }: WelcomeScreenProps) {
                   You know what your skin<br />needs now<br />Choose with confidence
                 </p>
               </div>
-              <ChevronRight className="w-6 h-6 text-[#7C9075] shrink-0" strokeWidth={1.5} />
             </div>
           </div>
 

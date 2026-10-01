@@ -105,14 +105,7 @@ export default function BarrierQuizScreen({ onNavigate, onSetResults, onGoBack }
     >
       {/* Dynamic Header bar */}
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 border-b border-stone-200/10 font-sans">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={handleBack}
-            className="p-1 text-stone-300 hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-            title="Go Back"
-          >
-            <ArrowLeft className="w-6 h-6 text-[#DAA89B]" />
-          </button>
+        <div className="flex items-center">
           <span className="font-serif font-semibold text-base tracking-wide text-white">Skin Barrier Profiler</span>
         </div>
       </div>

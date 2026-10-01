@@ -111,12 +111,6 @@ export default function SavedScansScreen({ onNavigate }: SavedScansScreenProps) 
       className="flex flex-col min-h-full bg-[#FAF9F6] pb-10"
     >
       <div className="sticky top-0 z-10 bg-[#FAF9F6]/90 backdrop-blur-md px-5 py-4 border-b border-[#E2B4BD]/20 flex items-center justify-between">
-        <button
-          onClick={() => onNavigate('home')}
-          className="p-2 -ml-2 rounded-full hover:bg-white text-[#1B263B] transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
         <h1 className="text-lg font-serif font-bold text-[#1B263B]">Saved Scans</h1>
         <div className="w-9" />
       </div>

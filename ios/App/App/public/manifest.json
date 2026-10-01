@@ -1,0 +1,15 @@
+{
+  "name": "Menopause Skincare",
+  "short_name": "Skincare",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F1E7",
+  "theme_color": "#556953",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

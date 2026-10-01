@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Home, Heart, Trash2, ChevronRight, Sparkles, AlertTriangle, FileText } from 'lucide-react';
+import { ArrowLeft, Home, Heart, Trash2, ChevronRight, Sparkles, AlertTriangle, FileText, SunMoon, Calendar } from 'lucide-react';
 import { INGREDIENTS_DATA } from '../data';
 import { Screen } from '../types';
 
@@ -90,15 +90,7 @@ export default function FavoritesScreen({
     >
       {/* Header element */}
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 border-b border-stone-200/10 select-none">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onGoBack}
-            className="p-1 text-stone-300 hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-            id="fav_back_btn"
-            title="Go Back"
-          >
-            <ArrowLeft className="w-6 h-6 text-[#DAA89B]" />
-          </button>
+        <div className="flex items-center">
           <span className="font-serif font-semibold text-base tracking-wide text-white">Saved Ingredients</span>
         </div>
         
@@ -112,21 +104,13 @@ export default function FavoritesScreen({
               <FileText className="w-5 h-5 text-[#DAA89B]" />
             </button>
           )}
-          <button 
-            onClick={() => onNavigate('home')}
-            className="p-1 text-stone-300 hover:text-stone-100 rounded-full transition-colors active:scale-95 cursor-pointer"
-            id="fav_home_btn"
-            title="Home"
-          >
-            <Home className="w-5 h-5 text-[#DAA89B]" />
-          </button>
         </div>
       </div>
 
       <div className="p-6 bg-[#FAF9F6] flex-1 flex flex-col justify-between">
         <div>
           {/* Header Description */}
-          <div className="mb-6 select-none">
+          <div className="mb-5 select-none">
             <span className="text-[10px] text-[#DAA89B] font-bold tracking-widest uppercase font-sans">
               Personalized Regiment list
             </span>
@@ -136,6 +120,30 @@ export default function FavoritesScreen({
             <p className="text-xs text-stone-500 mt-1 font-sans">
               Quickly monitor warnings, compatibility, and application notes for ingredients of your choice.
             </p>
+          </div>
+
+          {/* Routine Builder CTA Button */}
+          <div className="mb-6">
+            <button
+              onClick={() => onNavigate('routine_builder')}
+              id="fav_go_routine_builder_btn"
+              className="w-full bg-[#556953] hover:bg-[#4A5D48] text-white p-3.5 rounded-xl flex items-center justify-between shadow-3xs transition-all cursor-pointer group active:scale-98"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/15 rounded-lg text-white">
+                  <SunMoon className="w-5 h-5" />
+                </div>
+                <div className="text-left font-sans">
+                  <span className="block text-xs font-bold text-white">
+                    Organize Morning & Evening Protocols
+                  </span>
+                  <span className="block text-[11px] text-stone-200/90 font-light mt-0.5">
+                    Categorize ingredients into daily AM / PM guides
+                  </span>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-white/80 group-hover:translate-x-1 transition-transform" />
+            </button>
           </div>
 
           {/* Favorites List Logic */}
@@ -197,28 +205,40 @@ export default function FavoritesScreen({
                         “{ing.quickTake}”
                       </p>
 
-                      <div className="mt-3 flex items-center gap-3">
+                      <div className="mt-3.5 pt-3 border-t border-stone-100 flex items-center justify-between gap-3">
                         {/* View Card Trigger */}
                         <button
                           onClick={() => {
                             onSelectIngredient(ing.id);
                           }}
-                          className="inline-flex items-center gap-1 text-xs font-sans font-bold text-[#1B263B] hover:text-[#C5A059] cursor-pointer"
+                          className="inline-flex items-center gap-1 text-xs font-sans font-bold text-[#1B263B] hover:text-[#556953] cursor-pointer"
                         >
                           <span>Open Card</span>
                           <ChevronRight className="w-3.5 h-3.5 mt-0.5" />
                         </button>
+
+                        {/* Explicit Remove Button */}
+                        <button
+                          onClick={() => onToggleFavorite(ing.id)}
+                          id={`fav_remove_btn_${ing.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-sans font-bold text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95"
+                          title="Remove from saved ingredients"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Remove</span>
+                        </button>
                       </div>
                     </div>
 
-                    {/* Quick Delete Heart icon and layout animation */}
+                    {/* Top Right Quick Remove button */}
                     <button
                       onClick={() => onToggleFavorite(ing.id)}
-                      className="p-2 text-[#C5A059] hover:bg-rose-50 hover:text-[#C5A059] rounded-lg transition-colors cursor-pointer shrink-0 absolute top-4 right-4"
+                      className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 rounded-lg transition-colors cursor-pointer shrink-0 absolute top-3.5 right-3.5 flex items-center gap-1 text-xs font-sans font-medium"
                       id={`fav_toggle_${ing.id}`}
-                      title="Remove Favorite"
+                      title="Remove from Saved Ingredients"
                     >
-                      <Heart className="w-5 h-5 fill-[#C5A059]" />
+                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                      <span className="text-[11px] font-semibold text-rose-700">Remove</span>
                     </button>
                   </motion.div>
                 ))}
@@ -229,17 +249,7 @@ export default function FavoritesScreen({
 
         {/* Elegant Bottom Navigation footer */}
         <div className="mt-12 pt-6 border-t border-stone-100/60 flex flex-col items-center gap-4 select-none">
-          <div className="flex items-center justify-between w-full">
-            {/* Previous Page Link with Arrow */}
-            <button
-              onClick={onGoBack}
-              className="flex items-center gap-1.5 text-xs font-sans font-bold text-[#1B263B] hover:text-[#C5A059] transition-colors cursor-pointer"
-              id="fav_footer_back"
-            >
-              <ArrowLeft className="w-4 h-4 text-[#DAA89B]" />
-              <span>Previous Page</span>
-            </button>
-
+          <div className="flex items-center justify-end w-full">
             {/* Back to Top Anchor */}
             <button
               onClick={() => {
