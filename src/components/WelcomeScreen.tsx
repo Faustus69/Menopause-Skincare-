@@ -7,12 +7,15 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, Leaf, Camera, ShoppingBag, ArrowDown } from 'lucide-react';
 import { Screen } from '../types';
+import { User } from 'firebase/auth';
 
 interface WelcomeScreenProps {
   onNavigate: (screen: Screen) => void;
+  user?: User | null;
+  onSignInClick?: () => void;
 }
 
-export default function WelcomeScreen({ onNavigate }: WelcomeScreenProps) {
+export default function WelcomeScreen({ onNavigate, user, onSignInClick }: WelcomeScreenProps) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -123,13 +126,32 @@ export default function WelcomeScreen({ onNavigate }: WelcomeScreenProps) {
         </div>
 
         {/* Footer CTA */}
-        <div className="mt-12 flex justify-center">
+        <div className="mt-10 flex flex-col items-center gap-3">
           <button
-            onClick={() => onNavigate('home')}
+            onClick={() => {
+              if (!user) {
+                onNavigate('auth');
+              } else {
+                onNavigate('home');
+              }
+            }}
             className="w-[280px] bg-[#67795E] hover:bg-[#5A6A52] text-white py-4 px-8 rounded-full font-sans font-medium text-[15px] tracking-[0.1em] transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-3 cursor-pointer uppercase"
           >
-            Let's dive in <ArrowRight className="w-5 h-5 stroke-[2]" />
+            {user ? "Let's dive in" : "Sign In & Enter"} <ArrowRight className="w-5 h-5 stroke-[2]" />
           </button>
+
+          {!user ? (
+            <button
+              onClick={() => onNavigate('auth')}
+              className="text-xs text-[#556953] hover:text-[#1A2622] font-semibold underline underline-offset-4 cursor-pointer py-1"
+            >
+              Sign In or Create Account
+            </button>
+          ) : (
+            <span className="text-[11px] text-[#556953]/80">
+              Signed in as <strong className="text-[#1A2622]">{user.email}</strong>
+            </span>
+          )}
         </div>
 
       </div>

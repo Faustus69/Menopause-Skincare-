@@ -7,17 +7,19 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Menu, X, Home, ShieldCheck, Sparkles, BookOpen, Heart, Camera, FileText, Info, Leaf, SunMoon, ChevronLeft,
-  Smartphone, Star, Download
+  LogOut, User as UserIcon
 } from 'lucide-react';
 import { Screen } from '../types';
+import { User } from 'firebase/auth';
 
 interface HeaderMenuProps {
   currentScreen: Screen;
   onNavigate: (screen: Screen) => void;
   onGoBack?: () => void;
   hasBarrierQuizAnswers: boolean;
-  isPro?: boolean;
-  onOpenInstallModal?: () => void;
+  user?: User | null;
+  onSignOut?: () => void;
+  onSignInClick?: () => void;
 }
 
 export default function HeaderMenu({ 
@@ -25,8 +27,9 @@ export default function HeaderMenu({
   onNavigate, 
   onGoBack, 
   hasBarrierQuizAnswers,
-  isPro = false,
-  onOpenInstallModal
+  user,
+  onSignOut,
+  onSignInClick
 }: HeaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -152,29 +155,8 @@ export default function HeaderMenu({
           </div>
         </div>
 
-        {/* Favourites Shortcut + Pro Badge + Hamburger Menu Actions */}
+        {/* Favourites Shortcut + Hamburger Menu Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Pro Status or Upgrade Button */}
-          {isPro ? (
-            <div 
-              onClick={() => handleLinkClick('upgrade')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs cursor-pointer hover:bg-amber-200 transition-colors"
-              title="Wise Bloom Pro Member"
-            >
-              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-              <span className="text-[10px] font-sans font-bold uppercase tracking-wider">Pro</span>
-            </div>
-          ) : (
-            <button
-              onClick={() => handleLinkClick('upgrade')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1B263B] text-white hover:bg-[#2C3E50] shadow-2xs transition-all active:scale-95 cursor-pointer"
-              title="Upgrade to Pro"
-            >
-              <Sparkles className="w-3 h-3 text-[#C5A059]" />
-              <span className="text-[10px] font-sans font-bold uppercase tracking-wider">Pro £9.99</span>
-            </button>
-          )}
-
           {/* Quick Heart Favourites Button from Design System (Section 9) - hidden on ingredient_az */}
           {currentScreen !== 'ingredient_az' && (
             <button
@@ -214,55 +196,6 @@ export default function HeaderMenu({
             id="mobile_menu_panel"
           >
             <div className="px-4 py-3 pb-5 flex flex-col gap-1.5 bg-background shadow-lg">
-              
-              {/* Pro Membership Banner */}
-              <div 
-                onClick={() => handleLinkClick('upgrade')}
-                className={`p-3 rounded-2xl mb-2 flex items-center justify-between cursor-pointer transition-all ${
-                  isPro 
-                    ? 'bg-gradient-to-r from-amber-50 to-amber-100 border border-amber-300' 
-                    : 'bg-[#1B263B] text-white hover:bg-[#2C3E50]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                    isPro ? 'bg-amber-400/30 text-amber-700' : 'bg-white/10 text-[#C5A059]'
-                  }`}>
-                    <Star className="w-4 h-4 fill-current" />
-                  </div>
-                  <div>
-                    <span className={`text-xs font-serif font-bold block ${isPro ? 'text-amber-950' : 'text-white'}`}>
-                      {isPro ? 'Wise Bloom Pro Member ★' : 'Unlock Wise Bloom Pro'}
-                    </span>
-                    <span className={`text-[10px] font-sans ${isPro ? 'text-amber-800' : 'text-stone-300'}`}>
-                      {isPro ? 'Full clinical studies & scanner active' : 'Lifetime pass £9.99 • No subscriptions'}
-                    </span>
-                  </div>
-                </div>
-                <span className={`text-[11px] font-sans font-bold px-2.5 py-1 rounded-lg ${
-                  isPro ? 'bg-white text-amber-900 border border-amber-200' : 'bg-[#C5A059] text-white'
-                }`}>
-                  {isPro ? 'Manage' : 'Get Pass'}
-                </span>
-              </div>
-
-              {/* Install App button if mobile / standalone prompt available */}
-              {onOpenInstallModal && (
-                <button
-                  onClick={() => {
-                    setIsOpen(false);
-                    onOpenInstallModal();
-                  }}
-                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-[#1B263B] text-xs font-sans font-bold transition-all mb-1 cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Download className="w-4 h-4 text-[#C5A059]" />
-                    <span>Install App to Home Screen</span>
-                  </div>
-                  <span className="text-[10px] text-stone-500 uppercase tracking-wider">Free</span>
-                </button>
-              )}
-
               <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground font-sans font-bold px-3 mb-1 select-none">
                 Navigation
               </span>
@@ -284,6 +217,50 @@ export default function HeaderMenu({
                   </button>
                 );
               })}
+
+              {/* Account & Session Controls */}
+              <div className="mt-2 pt-3 border-t border-border/50 flex flex-col gap-1">
+                <span className="text-[9px] uppercase tracking-[0.18em] text-muted-foreground font-sans font-bold px-3 mb-0.5 select-none">
+                  Customer Account
+                </span>
+                {user ? (
+                  <div className="px-3 py-2 bg-secondary/30 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        <UserIcon className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-xs text-foreground truncate max-w-[170px]" title={user.email || ''}>
+                        {user.email}
+                      </span>
+                    </div>
+                    {onSignOut && (
+                      <button
+                        onClick={() => {
+                          setIsOpen(false);
+                          onSignOut();
+                        }}
+                        className="text-[11px] font-semibold text-rose-700 hover:text-rose-900 flex items-center gap-1 cursor-pointer ml-2 shrink-0 py-1 px-1.5 rounded hover:bg-rose-50"
+                      >
+                        <LogOut className="w-3 h-3" />
+                        <span>Sign Out</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  onSignInClick && (
+                    <button
+                      onClick={() => {
+                        setIsOpen(false);
+                        onSignInClick();
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left text-xs font-semibold text-primary bg-secondary/60 hover:bg-secondary transition-colors cursor-pointer"
+                    >
+                      <UserIcon className="w-4 h-4 text-primary" />
+                      <span>Sign In / Register</span>
+                    </button>
+                  )
+                )}
+              </div>
             
             </div>
           </motion.div>

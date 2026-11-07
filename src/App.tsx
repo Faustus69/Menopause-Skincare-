@@ -21,16 +21,119 @@ import SavedScansScreen from './components/SavedScansScreen';
 import SkinProfilerScreen from './components/SkinProfilerScreen';
 import WelcomeScreen from './components/WelcomeScreen';
 import RoutineBuilderScreen from './components/RoutineBuilderScreen';
-import UpgradeScreen from './components/UpgradeScreen';
-import InstallAppModal from './components/InstallAppModal';
 import HeaderMenu from './components/HeaderMenu';
+import AuthScreen from './components/AuthScreen';
+import AccessPendingScreen from './components/AccessPendingScreen';
 import { Screen, UserProfile, RoutineState, RoutineSlot } from './types';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth, logout, ensureUserProfileDoc, isOwnerUser } from './firebase';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
   const [selectedConcern, setSelectedConcern] = useState<string>('');
   const [selectedIngredientId, setSelectedIngredientId] = useState<string>('');
   const [quizAnswers, setQuizAnswers] = useState<Record<string, boolean>>({});
+
+  // Firebase Auth & Customer Access State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userAccount, setUserAccount] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const [authVersion, setAuthVersion] = useState(0);
+
+  const refreshUserAccount = React.useCallback(async () => {
+    if (!auth.currentUser) return null;
+    try {
+      // 1. Force reload user profile from Google Firebase Auth servers
+      await auth.currentUser.reload();
+      // 2. Force refresh security token to obtain latest email_verified claim
+      const idToken = await auth.currentUser.getIdToken(true);
+      
+      // 3. Create a new user snapshot to guarantee React re-renders with updated emailVerified
+      const clonedUser = Object.assign(Object.create(Object.getPrototypeOf(auth.currentUser)), auth.currentUser);
+      setCurrentUser(clonedUser);
+      setAuthVersion((v) => v + 1);
+
+      // 4. Fetch the latest user profile from Firestore
+      const profileDoc = await ensureUserProfileDoc(auth.currentUser);
+      setUserAccount(profileDoc);
+
+      // 5. Query /api/auth/verify-session on our server
+      let serverResult: any = null;
+      try {
+        const res = await fetch('/api/auth/verify-session', {
+          headers: { 'Authorization': `Bearer ${idToken}` }
+        });
+        serverResult = await res.json();
+      } catch (e) {
+        console.warn('Session check warning:', e);
+      }
+
+      const isOwner = isOwnerUser(auth.currentUser);
+      const isPaid = isOwner || profileDoc?.isPaid === true || serverResult?.user?.isPaid === true;
+
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      return {
+        emailVerified: Boolean(auth.currentUser.emailVerified),
+        isPaid,
+        email: auth.currentUser.email,
+        timestamp: timeStr
+      };
+    } catch (err) {
+      console.warn('Error refreshing user status:', err);
+      return null;
+    }
+  }, []);
+
+  // Auto-refresh when user switches back to the app window/tab after clicking verification link
+  React.useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && auth.currentUser) {
+        refreshUserAccount().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, [refreshUserAccount]);
+
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        try {
+          const profileDoc = await ensureUserProfileDoc(user);
+          setUserAccount(profileDoc);
+        } catch (e) {
+          console.error('Error syncing user account doc:', e);
+        }
+      } else {
+        setUserAccount(null);
+      }
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const isOwner = isOwnerUser(currentUser);
+  // Server-verified owner access & database-verified customer access:
+  // The app owner has full access verified by their Firebase UID.
+  // Customers require verified isPaid === true in Firestore.
+  const isAccountPaid = Boolean(isOwner || userAccount?.isPaid === true);
+
+  // When user is authenticated and verified paid (or owner), advance past pending/auth screen
+  React.useEffect(() => {
+    if (currentUser && isAccountPaid) {
+      if (currentScreen === 'access_pending' || currentScreen === 'auth') {
+        setCurrentScreen('home');
+      }
+    }
+  }, [currentUser, isAccountPaid, currentScreen]);
   
   // User Profile State
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
@@ -41,9 +144,6 @@ export default function App() {
       return { barrierType: null, concerns: [], recommendedIngredients: [] };
     }
   });
-
-  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
-  const [paymentSuccessToast, setPaymentSuccessToast] = useState(false);
 
   const handleUpdateProfile = React.useCallback((updates: Partial<UserProfile>) => {
     setUserProfile((prev) => {
@@ -65,20 +165,14 @@ export default function App() {
         newIngredients.some((ing, i) => ing !== prev.recommendedIngredients[i])
       );
 
-      const hasProChange = updates.isPro !== undefined && updates.isPro !== prev.isPro;
-      const hasPlanChange = updates.planType !== undefined && updates.planType !== prev.planType;
-
-      if (!hasBarrierChange && !hasConcernsChange && !hasIngredientsChange && !hasProChange && !hasPlanChange) {
+      if (!hasBarrierChange && !hasConcernsChange && !hasIngredientsChange) {
         return prev;
       }
 
       const next: UserProfile = {
         barrierType: updates.barrierType !== undefined ? updates.barrierType : prev.barrierType,
         concerns: newConcerns,
-        recommendedIngredients: newIngredients,
-        isPro: updates.isPro !== undefined ? updates.isPro : prev.isPro,
-        planType: updates.planType !== undefined ? updates.planType : prev.planType,
-        purchasedAt: updates.purchasedAt !== undefined ? updates.purchasedAt : prev.purchasedAt
+        recommendedIngredients: newIngredients
       };
 
       try {
@@ -89,30 +183,6 @@ export default function App() {
       return next;
     });
   }, []);
-
-  // Listen for Stripe redirect parameters (?payment=success&session_id=...)
-  React.useEffect(() => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const paymentStatus = urlParams.get('payment');
-      const sessionId = urlParams.get('session_id');
-      const plan = (urlParams.get('plan') as any) || 'lifetime';
-
-      if (paymentStatus === 'success' && sessionId) {
-        handleUpdateProfile({
-          isPro: true,
-          planType: plan,
-          purchasedAt: new Date().toISOString()
-        });
-        setPaymentSuccessToast(true);
-        // Clean URL parameters cleanly without page refresh
-        const cleanUrl = window.location.pathname;
-        window.history.replaceState({}, document.title, cleanUrl);
-      }
-    } catch (e) {
-      console.error('Error handling payment redirect:', e);
-    }
-  }, [handleUpdateProfile]);
 
   // Favorites State with localStorage persistence for safe, durable user sessions
   const [favorites, setFavorites] = useState<string[]>(() => {
@@ -205,16 +275,65 @@ export default function App() {
 
   // Safe router rendering the accurate views inside the simulated Android phone frame
   const renderScreen = () => {
+    // 1. Welcome Screen is accessible to everyone
+    if (currentScreen === 'welcome') {
+      return (
+        <WelcomeScreen 
+          onNavigate={(screen) => navigateTo(screen)} 
+          user={currentUser}
+          onSignInClick={() => navigateTo('auth')}
+        />
+      );
+    }
+
+    // 2. Authentication Screen (Sign In / Register / Reset Password)
+    if (currentScreen === 'auth') {
+      return (
+        <AuthScreen 
+          onSuccess={() => {
+            if (isAccountPaid) {
+              navigateTo('home');
+            } else {
+              navigateTo('access_pending');
+            }
+          }}
+          onBackToWelcome={() => navigateTo('welcome')}
+        />
+      );
+    }
+
+    // 3. Gatekeeper check: Unauthenticated users are directed to the Auth screen
+    if (!currentUser) {
+      return (
+        <AuthScreen 
+          onSuccess={() => {
+            if (isAccountPaid) {
+              navigateTo('home');
+            } else {
+              navigateTo('access_pending');
+            }
+          }}
+          onBackToWelcome={() => navigateTo('welcome')}
+        />
+      );
+    }
+
+    // 4. Access Pending Screen: Registered customers whose payment is not yet verified
+    if (!isAccountPaid) {
+      return (
+        <AccessPendingScreen 
+          key={authVersion}
+          user={currentUser}
+          onRefreshStatus={refreshUserAccount}
+        />
+      );
+    }
+
     switch (currentScreen) {
-      case 'welcome':
-        return <WelcomeScreen onNavigate={(screen) => navigateTo(screen)} />;
-        
       case 'home':
         return (
           <HomeScreen 
             onNavigate={(screen) => navigateTo(screen)} 
-            isPro={userProfile.isPro}
-            onOpenInstallModal={() => setIsInstallModalOpen(true)}
           />
         );
         
@@ -404,54 +523,25 @@ export default function App() {
           />
         );
 
-      case 'upgrade':
-        return (
-          <UpgradeScreen
-            onGoBack={handleBack}
-            onNavigate={(screen) => {
-              if (screen === 'home') handleGoHome();
-              else navigateTo(screen);
-            }}
-            userProfile={userProfile}
-            onUpdateProfile={handleUpdateProfile}
-            onOpenInstallModal={() => setIsInstallModalOpen(true)}
-          />
-        );
-        
       default:
-        return <HomeScreen onNavigate={(screen) => navigateTo(screen)} isPro={userProfile.isPro} onOpenInstallModal={() => setIsInstallModalOpen(true)} />;
+        return <HomeScreen onNavigate={(screen) => navigateTo(screen)} />;
     }
   };
 
   return (
     <PhoneContainer screen={currentScreen}>
-      {/* Payment Success Toast Celebration */}
-      {paymentSuccessToast && (
-        <div className="absolute top-3 left-4 right-4 z-50 p-4 rounded-2xl bg-gradient-to-r from-emerald-800 to-teal-900 text-white shadow-xl flex items-center justify-between animate-bounce">
-          <div className="flex items-center gap-3">
-            <span className="text-xl">🎉</span>
-            <div>
-              <span className="font-serif font-bold text-sm block">Welcome to Wise Bloom Pro!</span>
-              <span className="text-[11px] text-emerald-200">Full access unlocked. Thank you for your purchase.</span>
-            </div>
-          </div>
-          <button
-            onClick={() => setPaymentSuccessToast(false)}
-            className="text-xs bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-lg text-white font-bold cursor-pointer"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {currentScreen !== 'welcome' && (
+      {currentScreen !== 'welcome' && currentScreen !== 'auth' && currentScreen !== 'access_pending' && (
         <HeaderMenu 
           currentScreen={currentScreen}
           onNavigate={navigateTo}
           onGoBack={handleBack}
           hasBarrierQuizAnswers={Object.keys(quizAnswers).length > 0}
-          isPro={userProfile.isPro}
-          onOpenInstallModal={() => setIsInstallModalOpen(true)}
+          user={currentUser}
+          onSignOut={async () => {
+            await logout();
+            navigateTo('welcome');
+          }}
+          onSignInClick={() => navigateTo('auth')}
         />
       )}
       <div className="flex-1 relative overflow-hidden flex flex-col">
@@ -468,12 +558,6 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </div>
-
-      {/* Mobile App Install Modal */}
-      <InstallAppModal
-        isOpen={isInstallModalOpen}
-        onClose={() => setIsInstallModalOpen(false)}
-      />
     </PhoneContainer>
   );
 }

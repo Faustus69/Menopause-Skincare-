@@ -72,7 +72,7 @@ export default function PhoneContainer({ children, screen }: PhoneContainerProps
   }, [screen]);
 
   return (
-    <div className="min-h-screen w-full bg-stone-100 flex items-center justify-center py-6 px-4 md:py-10">
+    <div className="min-h-screen w-full bg-stone-100 flex items-center justify-center p-0 md:py-10 md:px-4">
       {/* Outer Phone Shell (Only styled as physical phone on medium and up screens) */}
       <div 
         id="android_phone_container"
@@ -115,7 +115,7 @@ export default function PhoneContainer({ children, screen }: PhoneContainerProps
           </div>
 
           {/* Elegant Footer with contact email */}
-          {screen !== 'welcome' && (
+          {screen !== 'welcome' && screen !== 'auth' && screen !== 'access_pending' && (
             <footer className="mt-6 md:mt-8 py-6 px-6 bg-[hsl(var(--cream))] border-t border-[hsl(var(--border))]/60 text-center flex flex-col items-center justify-center shrink-0">
               {/* Back to top button */}
               <button

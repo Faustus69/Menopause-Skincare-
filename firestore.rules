@@ -6,15 +6,25 @@ service cloud.firestore {
     }
 
     function isSignedIn() { return request.auth != null; }
+    function isAdmin() { 
+      return isSignedIn() && (
+        request.auth.uid == 'hCN44TadBZMVJC5mzKspDFWNYYL2' ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'needthis2027@gmail.com' && request.auth.token.email_verified == true)
+      ); 
+    }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     
     function isValidUserProfile(data) {
       return data.keys().hasAll(['createdAt', 'updatedAt'])
-        && ( !('barrierType' in data) || (data.barrierType is string && data.barrierType.size() <= 100))
+        && ( !('barrierType' in data) || data.barrierType == null || (data.barrierType is string && data.barrierType.size() <= 100))
         && ( !('concerns' in data) || (data.concerns is list && data.concerns.size() <= 50))
-        && ( !('recommendedIngredients' in data) || (data.recommendedIngredients is list && data.recommendedIngredients.size() <= 100));
+        && ( !('recommendedIngredients' in data) || (data.recommendedIngredients is list && data.recommendedIngredients.size() <= 100))
+        && ( !('email' in data) || data.email == null || (data.email is string && data.email.size() <= 200))
+        && ( !('isPaid' in data) || (data.isPaid is bool))
+        && ( !('role' in data) || (data.role is string && data.role.size() <= 50))
+        && ( !('stripeCustomerId' in data) || data.stripeCustomerId == null || (data.stripeCustomerId is string && data.stripeCustomerId.size() <= 100));
     }
     
     function isValidScan(data) {
@@ -26,16 +36,28 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      
+      // On create: Ordinary users can ONLY set isPaid: false (or omit it) and role: 'customer'.
+      // Only the admin can create an account with isPaid: true or role: 'admin'.
       allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId
                     && isValidUserProfile(incoming())
                     && incoming().createdAt == request.time
-                    && incoming().updatedAt == request.time;
-      allow update: if isSignedIn() && request.auth.uid == userId
+                    && incoming().updatedAt == request.time
+                    && ( !('isPaid' in incoming()) || incoming().isPaid == false || isAdmin() )
+                    && ( !('role' in incoming()) || incoming().role == 'customer' || isAdmin() );
+                    
+      // On update: Ordinary users CANNOT change their isPaid status, role, or stripeCustomerId.
+      // incoming().isPaid must equal existing().isPaid unless the request is made by the admin.
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin())
                     && isValidUserProfile(incoming())
                     && incoming().createdAt == existing().createdAt
-                    && incoming().updatedAt == request.time;
-      allow delete: if isSignedIn() && request.auth.uid == userId;
+                    && incoming().updatedAt == request.time
+                    && ( incoming().isPaid == existing().isPaid || isAdmin() )
+                    && ( incoming().role == existing().role || isAdmin() )
+                    && ( !('stripeCustomerId' in incoming()) || incoming().stripeCustomerId == existing().stripeCustomerId || isAdmin() );
+                    
+      allow delete: if isAdmin();
       
       match /scans/{scanId} {
         allow read, list: if isSignedIn() && request.auth.uid == userId;

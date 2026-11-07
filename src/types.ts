@@ -59,7 +59,24 @@ export interface ClinicalEvidenceData {
   dermatologicalTakeaway: string;
 }
 
-export type Screen = 'welcome' | 'home' | 'concern_list' | 'concern_results' | 'ingredient_az' | 'ingredient_detail' | 'barrier_quiz' | 'barrier_results' | 'how_to_use' | 'favorites' | 'routine_builder' | 'product_analyzer' | 'notes' | 'skin_profiler' | 'saved_scans' | 'upgrade';
+export type Screen = 
+  | 'welcome' 
+  | 'auth'
+  | 'access_pending'
+  | 'home' 
+  | 'concern_list' 
+  | 'concern_results' 
+  | 'ingredient_az' 
+  | 'ingredient_detail' 
+  | 'barrier_quiz' 
+  | 'barrier_results' 
+  | 'how_to_use' 
+  | 'favorites' 
+  | 'routine_builder' 
+  | 'product_analyzer' 
+  | 'notes' 
+  | 'skin_profiler' 
+  | 'saved_scans';
 
 export type RoutineSlot = 'am' | 'pm' | 'both' | 'none';
 
@@ -71,7 +88,19 @@ export interface UserProfile {
   barrierType: string | null;
   concerns: string[];
   recommendedIngredients: string[];
-  isPro?: boolean;
-  planType?: 'lifetime' | 'annual' | 'monthly' | 'free';
-  purchasedAt?: string;
+  email?: string;
+  isPaid?: boolean;
+  role?: 'customer' | 'admin';
+  stripeCustomerId?: string | null;
+}
+
+export interface UserAccount {
+  uid: string;
+  email: string | null;
+  isPaid: boolean;
+  role: 'customer' | 'admin';
+  emailVerified: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+  stripeCustomerId?: string | null;
 }

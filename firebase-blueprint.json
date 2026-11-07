@@ -8,6 +8,10 @@
         "barrierType": { "type": "string" },
         "concerns": { "type": "array", "items": { "type": "string" } },
         "recommendedIngredients": { "type": "array", "items": { "type": "string" } },
+        "email": { "type": "string" },
+        "isPaid": { "type": "boolean" },
+        "role": { "type": "string" },
+        "stripeCustomerId": { "type": "string" },
         "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" }
       },

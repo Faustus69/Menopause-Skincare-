@@ -30,6 +30,7 @@ import { Screen, UserProfile, RoutineState, RoutineSlot } from '../types';
 import { INGREDIENTS_DATA } from '../data';
 import { Save } from 'lucide-react';
 import { checkRoutineConflicts, ConflictAlert } from '../utils/routineConflict';
+import { auth } from '../firebase';
 
 interface IngredientAnalysis {
   name: string;
@@ -284,10 +285,12 @@ export default function ProductAnalyzerScreen({
         payload.routine = routine;
       }
 
+      const idToken = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
       const response = await fetch('/api/analyze-ingredients', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {})
         },
         body: JSON.stringify(payload)
       });

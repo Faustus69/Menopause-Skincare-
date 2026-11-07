@@ -7,21 +7,139 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
-import Stripe from 'stripe';
 import { INGREDIENTS_DATA } from './src/data';
 import 'dotenv/config';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Use JSON parsing with a 10MB limit to handle base64 image payloads
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+  const FIREBASE_API_KEY = process.env.VITE_FIREBASE_API_KEY || 'AIzaSyC93uR120iFE0y2dGGm0I6Tp8vu8ORyu9o';
+  const OWNER_UID = 'hCN44TadBZMVJC5mzKspDFWNYYL2';
+  const OWNER_EMAIL = 'needthis2027@gmail.com';
+
+  function isOwnerUser(user: { uid?: string; email?: string | null; emailVerified?: boolean } | null | undefined): boolean {
+    if (!user) return false;
+    // Primary secure identity authority: verified Firebase User ID
+    if (user.uid === OWNER_UID) return true;
+    // Secondary check: email if verified
+    if (user.email && user.email.toLowerCase() === OWNER_EMAIL.toLowerCase() && user.emailVerified === true) {
+      return true;
+    }
+    return false;
+  }
+
+  async function verifyFirebaseToken(idToken: string | undefined) {
+    if (!idToken) return null;
+    try {
+      const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken })
+      });
+      const data = await res.json() as any;
+      if (data.users && data.users.length > 0) {
+        const u = data.users[0];
+        const uid = u.localId;
+        const email = u.email;
+        const emailVerified = u.emailVerified === true;
+        const isOwner = isOwnerUser({ uid, email, emailVerified });
+        return {
+          uid,
+          email,
+          emailVerified,
+          isOwner
+        };
+      }
+      return null;
+    } catch (err) {
+      console.error('Server token verification failed:', err);
+      return null;
+    }
+  }
+
+  // Session verification endpoint for verified client access
+  app.get('/api/auth/verify-session', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+      if (!token) {
+        return res.status(401).json({ authenticated: false, error: 'No token provided' });
+      }
+      const user = await verifyFirebaseToken(token);
+      if (!user) {
+        return res.status(401).json({ authenticated: false, error: 'Invalid or expired token' });
+      }
+
+      let isPaid = user.isOwner;
+      if (!isPaid) {
+        try {
+          const dbId = 'ai-studio-themenopauseskin-fd8161d9-500d-4851-a59b-0a400cee5175';
+          const firestoreUrl = `https://firestore.googleapis.com/v1/projects/gen-lang-client-0969934764/databases/${dbId}/documents/users/${user.uid}`;
+          const fsRes = await fetch(firestoreUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const fsData = await fsRes.json() as any;
+          isPaid = fsData?.fields?.isPaid?.booleanValue === true;
+        } catch {
+          isPaid = false;
+        }
+      }
+
+      return res.json({
+        authenticated: true,
+        user: {
+          uid: user.uid,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          isOwner: user.isOwner,
+          isPaid
+        }
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || 'Server verification failed' });
+    }
+  });
+
   // API router endpoint: Analyze ingredient list from photo or text
   app.post('/api/analyze-ingredients', async (req, res) => {
     try {
+      // Server-side identity verification: Ensure requester is authenticated
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+      const user = await verifyFirebaseToken(token || undefined);
+      if (!user) {
+        return res.status(401).json({
+          error: 'Authentication required. Please sign in to analyze ingredients.'
+        });
+      }
+
+      // Server-side payment check: Only the app owner or verified paid customers can call Gemini
+      if (!user.isOwner) {
+        try {
+          const dbId = 'ai-studio-themenopauseskin-fd8161d9-500d-4851-a59b-0a400cee5175';
+          const firestoreUrl = `https://firestore.googleapis.com/v1/projects/gen-lang-client-0969934764/databases/${dbId}/documents/users/${user.uid}`;
+          const fsRes = await fetch(firestoreUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const fsData = await fsRes.json() as any;
+          const isPaid = fsData?.fields?.isPaid?.booleanValue === true;
+          if (!isPaid) {
+            return res.status(403).json({
+              error: 'Customer access required. Please purchase The Menopause Skincare Decoder to analyze ingredients.'
+            });
+          }
+        } catch (dbErr) {
+          console.error('Server check of isPaid failed:', dbErr);
+          return res.status(403).json({
+            error: 'Unable to verify customer payment status. Please try again.'
+          });
+        }
+      }
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.status(500).json({
@@ -349,135 +467,6 @@ WHEN ANALYSING THIS SCANNED PRODUCT:
       res.status(500).json({
         error: error?.message || 'An error occurred during ingredient analysis. Please try again.'
       });
-    }
-  });
-
-  // Stripe Checkout Session Creation
-  app.post('/api/stripe/create-checkout-session', async (req, res) => {
-    try {
-      const { plan = 'lifetime', userEmail, origin } = req.body;
-      const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-
-      const baseHost = origin || req.headers.referer?.replace(/\/$/, '') || 'https://wisebloom.co.uk';
-
-      // Plan pricing configurations in GBP (£)
-      const plansData: Record<string, { name: string; amount: number; description: string; interval?: 'month' | 'year' }> = {
-        lifetime: {
-          name: 'Wise Bloom Pro • Lifetime Access Pass',
-          amount: 999, // £9.99 in pence
-          description: 'Unlimited lifetime access to all 50+ ingredients, clinical evidence dossiers, AI scanner, and routine builder.'
-        },
-        annual: {
-          name: 'Wise Bloom Pro • Annual Membership',
-          amount: 2499, // £24.99 in pence
-          description: 'Full 1-year access with monthly ingredient updates and routine builder.',
-          interval: 'year'
-        },
-        monthly: {
-          name: 'Wise Bloom Pro • Monthly Membership',
-          amount: 399, // £3.99 in pence
-          description: 'Flexible monthly access with ongoing clinical updates and scanner.',
-          interval: 'month'
-        }
-      };
-
-      const selectedPlan = plansData[plan] || plansData.lifetime;
-
-      // If no Stripe Secret Key configured yet, provide a mock simulation checkout so testing works seamlessly
-      if (!stripeSecretKey) {
-        return res.json({
-          success: true,
-          mode: 'simulation',
-          message: 'Stripe Secret Key not configured in .env yet. Running in simulation mode.',
-          checkoutUrl: `${baseHost}?payment=success&session_id=sim_${Date.now()}&plan=${plan}`,
-          plan: selectedPlan
-        });
-      }
-
-      const stripe = new Stripe(stripeSecretKey, {
-        apiVersion: '2023-10-16' as any
-      });
-
-      const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
-        {
-          price_data: {
-            currency: 'gbp',
-            product_data: {
-              name: selectedPlan.name,
-              description: selectedPlan.description
-            },
-            unit_amount: selectedPlan.amount,
-            ...(selectedPlan.interval ? { recurring: { interval: selectedPlan.interval } } : {})
-          },
-          quantity: 1
-        }
-      ];
-
-      const session = await stripe.checkout.sessions.create({
-        mode: selectedPlan.interval ? 'subscription' : 'payment',
-        line_items: lineItems,
-        customer_email: userEmail || undefined,
-        success_url: `${baseHost}?payment=success&session_id={CHECKOUT_SESSION_ID}&plan=${plan}`,
-        cancel_url: `${baseHost}?payment=cancelled`,
-        metadata: {
-          plan,
-          source: 'wisebloom.co.uk'
-        }
-      });
-
-      return res.json({
-        success: true,
-        mode: 'live',
-        checkoutUrl: session.url,
-        sessionId: session.id
-      });
-    } catch (error: any) {
-      console.error('Stripe checkout error:', error);
-      res.status(500).json({
-        error: error?.message || 'Failed to create Stripe checkout session'
-      });
-    }
-  });
-
-  // Stripe Session Verification
-  app.get('/api/stripe/verify-session', async (req, res) => {
-    try {
-      const sessionId = req.query.sessionId as string;
-      const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-
-      if (!sessionId) {
-        return res.status(400).json({ error: 'Session ID is required' });
-      }
-
-      // If simulated session
-      if (sessionId.startsWith('sim_')) {
-        return res.json({
-          paid: true,
-          status: 'complete',
-          plan: (req.query.plan as string) || 'lifetime',
-          simulated: true
-        });
-      }
-
-      if (!stripeSecretKey) {
-        return res.json({ paid: true, status: 'complete', simulated: true });
-      }
-
-      const stripe = new Stripe(stripeSecretKey, {
-        apiVersion: '2023-10-16' as any
-      });
-
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-      return res.json({
-        paid: session.payment_status === 'paid' || session.status === 'complete',
-        status: session.status,
-        customerEmail: session.customer_details?.email,
-        plan: session.metadata?.plan || 'lifetime'
-      });
-    } catch (error: any) {
-      console.error('Stripe verification error:', error);
-      res.status(500).json({ error: error?.message || 'Verification failed' });
     }
   });
 
