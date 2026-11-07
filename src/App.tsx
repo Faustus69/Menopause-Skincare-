@@ -39,10 +39,11 @@ export default function App() {
   const [userAccount, setUserAccount] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [authVersion, setAuthVersion] = useState(0);
+  const isRefreshingRef = React.useRef(false);
 
   const refreshUserAccount = React.useCallback(async () => {
-    if (!auth.currentUser) return null;
+    if (!auth.currentUser || isRefreshingRef.current) return null;
+    isRefreshingRef.current = true;
     try {
       // 1. Force reload user profile from Google Firebase Auth servers
       await auth.currentUser.reload();
@@ -52,7 +53,6 @@ export default function App() {
       // 3. Create a new user snapshot to guarantee React re-renders with updated emailVerified
       const clonedUser = Object.assign(Object.create(Object.getPrototypeOf(auth.currentUser)), auth.currentUser);
       setCurrentUser(clonedUser);
-      setAuthVersion((v) => v + 1);
 
       // 4. Fetch the latest user profile from Firestore
       const profileDoc = await ensureUserProfileDoc(auth.currentUser);
@@ -84,6 +84,8 @@ export default function App() {
     } catch (err) {
       console.warn('Error refreshing user status:', err);
       return null;
+    } finally {
+      isRefreshingRef.current = false;
     }
   }, []);
 
@@ -322,7 +324,6 @@ export default function App() {
     if (!isAccountPaid) {
       return (
         <AccessPendingScreen 
-          key={authVersion}
           user={currentUser}
           onRefreshStatus={refreshUserAccount}
         />

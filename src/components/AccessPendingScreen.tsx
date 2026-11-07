@@ -25,7 +25,6 @@ interface RefreshResult {
 }
 
 interface AccessPendingScreenProps {
-  key?: React.Key;
   user: User;
   onRefreshStatus?: () => Promise<RefreshResult | null>;
 }
@@ -37,9 +36,11 @@ export default function AccessPendingScreen({
   const [resendingEmail, setResendingEmail] = useState(false);
   const [emailNotice, setEmailNotice] = useState<string | null>(null);
 
-  // Trigger silent refresh on mount in case user returned from email verification tab
+  // Trigger silent refresh once on initial mount only
+  const hasCheckedMount = React.useRef(false);
   React.useEffect(() => {
-    if (onRefreshStatus && !user.emailVerified) {
+    if (onRefreshStatus && !user.emailVerified && !hasCheckedMount.current) {
+      hasCheckedMount.current = true;
       onRefreshStatus().catch(() => {});
     }
   }, [onRefreshStatus, user.emailVerified]);
