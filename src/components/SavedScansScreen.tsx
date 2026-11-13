@@ -8,6 +8,8 @@ interface SavedScansScreenProps {
   onNavigate: (screen: Screen) => void;
 }
 
+import { getScansStorageKey } from '../firebase';
+
 export default function SavedScansScreen({ onNavigate }: SavedScansScreenProps) {
   const [scans, setScans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,7 +18,8 @@ export default function SavedScansScreen({ onNavigate }: SavedScansScreenProps) 
 
   useEffect(() => {
     try {
-      const savedScansStr = localStorage.getItem('boots_skin_decoder_scans');
+      const storageKey = getScansStorageKey();
+      const savedScansStr = localStorage.getItem(storageKey);
       const savedScans = savedScansStr ? JSON.parse(savedScansStr) : [];
       setScans(savedScans);
     } catch (e) {
@@ -28,9 +31,10 @@ export default function SavedScansScreen({ onNavigate }: SavedScansScreenProps) 
 
   const handleDelete = (scanId: string) => {
     try {
+      const storageKey = getScansStorageKey();
       const updatedScans = scans.filter(scan => scan.id !== scanId);
       setScans(updatedScans);
-      localStorage.setItem('boots_skin_decoder_scans', JSON.stringify(updatedScans));
+      localStorage.setItem(storageKey, JSON.stringify(updatedScans));
     } catch (err) {
       console.error("Error deleting scan", err);
     }
@@ -39,6 +43,7 @@ export default function SavedScansScreen({ onNavigate }: SavedScansScreenProps) 
   const handleUpdateName = (scanId: string) => {
     if (!editName.trim()) return;
     try {
+      const storageKey = getScansStorageKey();
       const updatedScans = scans.map(scan => {
         if (scan.id === scanId) {
           return {
@@ -50,7 +55,7 @@ export default function SavedScansScreen({ onNavigate }: SavedScansScreenProps) 
         return scan;
       });
       setScans(updatedScans);
-      localStorage.setItem('boots_skin_decoder_scans', JSON.stringify(updatedScans));
+      localStorage.setItem(storageKey, JSON.stringify(updatedScans));
       setEditingId(null);
     } catch (err) {
       console.error("Error updating scan name", err);

@@ -30,7 +30,7 @@ import { Screen, UserProfile, RoutineState, RoutineSlot } from '../types';
 import { INGREDIENTS_DATA } from '../data';
 import { Save } from 'lucide-react';
 import { checkRoutineConflicts, ConflictAlert } from '../utils/routineConflict';
-import { auth } from '../firebase';
+import { auth, getScansStorageKey, getStoredGuestPass } from '../firebase';
 
 interface IngredientAnalysis {
   name: string;
@@ -158,7 +158,8 @@ export default function ProductAnalyzerScreen({
     if (!result) return;
     setIsSaving(true);
     try {
-      const savedScansStr = localStorage.getItem('boots_skin_decoder_scans');
+      const storageKey = getScansStorageKey();
+      const savedScansStr = localStorage.getItem(storageKey);
       const savedScans = savedScansStr ? JSON.parse(savedScansStr) : [];
       
       const newScan = {
@@ -171,7 +172,7 @@ export default function ProductAnalyzerScreen({
       };
       
       savedScans.unshift(newScan);
-      localStorage.setItem('boots_skin_decoder_scans', JSON.stringify(savedScans));
+      localStorage.setItem(storageKey, JSON.stringify(savedScans));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -286,11 +287,13 @@ export default function ProductAnalyzerScreen({
       }
 
       const idToken = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
+      const guestPass = getStoredGuestPass(auth.currentUser?.uid);
       const response = await fetch('/api/analyze-ingredients', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {})
+          ...(idToken ? { 'Authorization': `Bearer ${idToken}` } : {}),
+          ...(guestPass ? { 'X-Guest-Pass': guestPass } : {})
         },
         body: JSON.stringify(payload)
       });

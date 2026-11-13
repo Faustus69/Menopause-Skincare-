@@ -6,6 +6,7 @@ import {
   signOut,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInAnonymously,
   sendEmailVerification,
   sendPasswordResetEmail,
   User
@@ -31,6 +32,37 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const OWNER_UID = 'hCN44TadBZMVJC5mzKspDFWNYYL2';
 export const OWNER_EMAIL = 'needthis2027@gmail.com';
 
+// WiseBloom permanent complimentary guest account email (legacy shared guest)
+export const GUEST_EMAIL = 'guest@wisebloom.co.uk';
+const GUEST_PASS_STORAGE_PREFIX = 'wb_guest_pass_';
+
+export const getStoredGuestPass = (uid?: string | null): string | null => {
+  if (!uid) return null;
+  try {
+    return localStorage.getItem(`${GUEST_PASS_STORAGE_PREFIX}${uid}`);
+  } catch {
+    return null;
+  }
+};
+
+export const setStoredGuestPass = (uid: string, pass: string) => {
+  try {
+    localStorage.setItem(`${GUEST_PASS_STORAGE_PREFIX}${uid}`, pass);
+  } catch {
+    // Ignore storage errors
+  }
+};
+
+export const clearStoredGuestPass = (uid?: string | null) => {
+  try {
+    if (uid) {
+      localStorage.removeItem(`${GUEST_PASS_STORAGE_PREFIX}${uid}`);
+    }
+  } catch {
+    // Ignore storage errors
+  }
+};
+
 /**
  * Validates whether an authenticated user is the app owner.
  * Primary authority: cryptographic Firebase User ID (UID).
@@ -40,6 +72,15 @@ export const isOwnerUser = (user: { uid?: string | null; email?: string | null; 
   if (!user) return false;
   if (user.uid && user.uid === OWNER_UID) return true;
   if (user.email && user.email.toLowerCase() === OWNER_EMAIL.toLowerCase() && user.emailVerified !== false) return true;
+  return false;
+};
+
+/**
+ * Validates whether an authenticated user is the legacy WiseBloom email guest account.
+ */
+export const isGuestUser = (user: { uid?: string | null; email?: string | null } | null | undefined): boolean => {
+  if (!user) return false;
+  if (user.email && user.email.toLowerCase() === GUEST_EMAIL.toLowerCase()) return true;
   return false;
 };
 
@@ -98,6 +139,9 @@ export function getAuthErrorMessage(error: any): string {
   const code = error.code || '';
   const message = error.message || '';
 
+  if (code === 'auth/admin-restricted-operation') {
+    return 'Anonymous guest sign-in is not yet enabled in the Firebase Console for this project. Please enable Anonymous under Authentication > Sign-in method.';
+  }
   if (code === 'auth/operation-not-allowed' || message.includes('OPERATION_NOT_ALLOWED')) {
     return 'Email/Password sign-in is not yet enabled in the Firebase Console for this project. Please turn on Email/Password in your Firebase Console under Authentication > Sign-in method, or sign in with Google.';
   }
@@ -192,28 +236,176 @@ export const signInWithGoogle = async () => {
  * Sign out the current user
  */
 export const logout = async () => {
+  const uid = auth.currentUser?.uid;
+  clearStoredGuestPass(uid);
+  try {
+    await fetch('/api/guest/signout', { method: 'POST' });
+  } catch {
+    // Ignore network error during signout cleanup
+  }
   await signOut(auth);
+};
+
+/**
+ * Redeem a private WiseBloom guest invitation link using Firebase Anonymous Authentication.
+ */
+export const redeemGuestInvite = async (inviteToken: string) => {
+  const trimmed = inviteToken.trim();
+  if (!trimmed) {
+    throw new Error('This guest invitation link is invalid.');
+  }
+
+  // If currently signed into a non-anonymous account, verify the invite token first before switching sessions
+  if (auth.currentUser && !auth.currentUser.isAnonymous) {
+    const existingIdToken = await auth.currentUser.getIdToken(true);
+    const preCheck = await fetch('/api/guest/validate-invite', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${existingIdToken}`
+      },
+      body: JSON.stringify({ inviteToken: trimmed })
+    });
+    const preData = await preCheck.json().catch(() => ({}));
+    if (!preCheck.ok || !preData.valid) {
+      throw new Error(preData.error || 'This guest invitation link has been revoked or is no longer active.');
+    }
+    await logout();
+  }
+
+  let activeUser = auth.currentUser;
+  if (!activeUser) {
+    try {
+      const cred = await signInAnonymously(auth);
+      activeUser = cred.user;
+    } catch (err: any) {
+      throw new Error(getAuthErrorMessage(err));
+    }
+  }
+
+  const idToken = await activeUser.getIdToken(true);
+  const res = await fetch('/api/guest/redeem', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${idToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ inviteToken: trimmed })
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.success || !data.guestPass) {
+    throw new Error(data.error || 'This guest invitation link has been revoked or is no longer active.');
+  }
+
+  setStoredGuestPass(activeUser.uid, data.guestPass);
+  return {
+    user: activeUser,
+    guestPass: data.guestPass as string
+  };
+};
+
+export interface GuestInviteStatus {
+  active: boolean;
+  inviteToken: string | null;
+  inviteUrl: string | null;
+  version: number;
+  updatedAt: string | null;
+}
+
+export const getGuestInviteStatus = async (): Promise<GuestInviteStatus> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !isOwnerUser(currentUser)) {
+    throw new Error('Unauthorized: Owner access required.');
+  }
+  const idToken = await currentUser.getIdToken(true);
+  const res = await fetch('/api/admin/guest-invite', {
+    headers: { 'Authorization': `Bearer ${idToken}` }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to load guest invitation link.');
+  }
+  return data;
+};
+
+export const rotateGuestInviteLink = async (): Promise<GuestInviteStatus> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !isOwnerUser(currentUser)) {
+    throw new Error('Unauthorized: Owner access required.');
+  }
+  const idToken = await currentUser.getIdToken(true);
+  const res = await fetch('/api/admin/guest-invite/rotate', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${idToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to replace guest invitation link.');
+  }
+  return data;
+};
+
+export const revokeGuestInviteLink = async (): Promise<GuestInviteStatus> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !isOwnerUser(currentUser)) {
+    throw new Error('Unauthorized: Owner access required.');
+  }
+  const idToken = await currentUser.getIdToken(true);
+  const res = await fetch('/api/admin/guest-invite/revoke', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${idToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to revoke guest invitation link.');
+  }
+  return data;
 };
 
 /**
  * Ensure user document exists in Firestore `/users/{uid}`.
  * Sets isPaid to true for the owner email, false by default for new accounts.
+ * Anonymous invited guests are kept isolated from Firestore customer/paid records.
  */
 export const ensureUserProfileDoc = async (user: User) => {
   if (!user || !user.uid) return null;
+  if (user.isAnonymous) {
+    return {
+      email: null,
+      isPaid: false,
+      role: 'guest_session',
+      barrierType: null,
+      concerns: [],
+      recommendedIngredients: []
+    };
+  }
   const userRef = doc(db, 'users', user.uid);
   try {
     const snap = await getDoc(userRef);
     const isOwner = isOwnerUser(user);
+    const isGuest = isGuestUser(user);
+    const hasFullAccess = isOwner || isGuest;
 
     if (!snap.exists()) {
       const initialProfile = {
         email: user.email || '',
-        isPaid: isOwner ? true : false,
-        role: isOwner ? 'admin' : 'customer',
+        isPaid: hasFullAccess ? true : false,
+        role: isOwner ? 'admin' : (isGuest ? 'guest' : 'customer'),
         barrierType: null,
         concerns: [],
         recommendedIngredients: [],
+        favorites: [],
+        routine: {},
+        notes: [],
+        scans: [],
+        lastResetAt: null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -221,24 +413,25 @@ export const ensureUserProfileDoc = async (user: User) => {
       return initialProfile;
     } else {
       const data = snap.data();
-      // Ensure owner always has admin and paid status
-      if (isOwner && (!data.isPaid || data.role !== 'admin')) {
+      const targetRole = isOwner ? 'admin' : (isGuest ? 'guest' : data.role || 'customer');
+      if (hasFullAccess && (!data.isPaid || data.role !== targetRole)) {
         await updateDoc(userRef, {
           isPaid: true,
-          role: 'admin',
+          role: targetRole,
           updatedAt: serverTimestamp()
         });
-        return { ...data, isPaid: true, role: 'admin' };
+        return { ...data, isPaid: true, role: targetRole };
       }
       return data;
     }
   } catch (error) {
     console.warn('Notice syncing user profile in Firestore:', error);
     const isOwner = isOwnerUser(user);
+    const isGuest = isGuestUser(user);
     return {
       email: user.email || '',
-      isPaid: isOwner ? true : false,
-      role: isOwner ? 'admin' : 'customer',
+      isPaid: isOwner || isGuest ? true : false,
+      role: isOwner ? 'admin' : (isGuest ? 'guest' : 'customer'),
       barrierType: null,
       concerns: [],
       recommendedIngredients: []
@@ -261,4 +454,73 @@ export const getUserProfileDoc = async (uid: string) => {
     handleFirestoreError(error, OperationType.GET, `users/${uid}`);
     return null;
   }
+};
+
+/**
+ * Owner-restricted action: Resets all saved routines, favourites, recommended actives, scans and notes
+ * for the complimentary WiseBloom Guest account.
+ */
+export const resetGuestAccountData = async () => {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !isOwnerUser(currentUser)) {
+    throw new Error('Unauthorized: Only the app owner can reset guest data.');
+  }
+
+  const idToken = await currentUser.getIdToken(true);
+
+  // 1. Call backend owner-verified endpoint
+  const res = await fetch('/api/admin/reset-guest-data', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${idToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Server failed to reset guest data.');
+  }
+
+  const result = await res.json();
+
+  // 2. Clear any guest-scoped data from local storage
+  try {
+    const guestKeys = [
+      'boots_skin_decoder_profile_guest',
+      'boots_skin_decoder_favorites_guest',
+      'boots_skin_decoder_routine_guest',
+      'boots_skin_decoder_scans_guest',
+      'boots_skin_decoder_notes_guest',
+      'boots_skin_decoder_guest_last_reset'
+    ];
+    guestKeys.forEach((k) => localStorage.removeItem(k));
+    if (result.guestUid) {
+      localStorage.removeItem(`boots_skin_decoder_profile_${result.guestUid}`);
+      localStorage.removeItem(`boots_skin_decoder_favorites_${result.guestUid}`);
+      localStorage.removeItem(`boots_skin_decoder_routine_${result.guestUid}`);
+      localStorage.removeItem(`boots_skin_decoder_scans_${result.guestUid}`);
+      localStorage.removeItem(`boots_skin_decoder_notes_${result.guestUid}`);
+    }
+  } catch (e) {
+    console.warn('Notice clearing local guest cache:', e);
+  }
+
+  return result;
+};
+
+export const getScansStorageKey = (user?: { uid?: string | null; email?: string | null; isAnonymous?: boolean } | null) => {
+  const target = user || auth.currentUser;
+  if (target?.isAnonymous && target?.uid) {
+    return `boots_skin_decoder_scans_${target.uid}`;
+  }
+  return isGuestUser(target) ? 'boots_skin_decoder_scans_guest' : 'boots_skin_decoder_scans';
+};
+
+export const getNotesStorageKey = (user?: { uid?: string | null; email?: string | null; isAnonymous?: boolean } | null) => {
+  const target = user || auth.currentUser;
+  if (target?.isAnonymous && target?.uid) {
+    return `boots_skin_decoder_notes_${target.uid}`;
+  }
+  return isGuestUser(target) ? 'boots_skin_decoder_notes_guest' : 'boots_skin_decoder_notes';
 };

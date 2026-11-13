@@ -12,6 +12,10 @@ service cloud.firestore {
         (request.auth.token.email != null && request.auth.token.email.lower() == 'needthis2027@gmail.com' && request.auth.token.email_verified == true)
       ); 
     }
+    function isGuest() {
+      return isSignedIn() && request.auth.token.email != null 
+        && request.auth.token.email.lower() == 'guest@wisebloom.co.uk';
+    }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
@@ -24,7 +28,12 @@ service cloud.firestore {
         && ( !('email' in data) || data.email == null || (data.email is string && data.email.size() <= 200))
         && ( !('isPaid' in data) || (data.isPaid is bool))
         && ( !('role' in data) || (data.role is string && data.role.size() <= 50))
-        && ( !('stripeCustomerId' in data) || data.stripeCustomerId == null || (data.stripeCustomerId is string && data.stripeCustomerId.size() <= 100));
+        && ( !('stripeCustomerId' in data) || data.stripeCustomerId == null || (data.stripeCustomerId is string && data.stripeCustomerId.size() <= 100))
+        && ( !('favorites' in data) || (data.favorites is list && data.favorites.size() <= 200))
+        && ( !('routine' in data) || (data.routine is map))
+        && ( !('notes' in data) || (data.notes is list && data.notes.size() <= 500))
+        && ( !('scans' in data) || (data.scans is list && data.scans.size() <= 200))
+        && ( !('lastResetAt' in data) || data.lastResetAt == null || (data.lastResetAt is string && data.lastResetAt.size() <= 100) || (data.lastResetAt is timestamp));
     }
     
     function isValidScan(data) {
@@ -35,26 +44,61 @@ service cloud.firestore {
         && ( !('ingredients' in data) || (data.ingredients is list && data.ingredients.size() <= 500));
     }
 
+    function isValidGuestInviteConfig(data) {
+      return data.keys().hasAll(['active', 'version', 'updatedAt'])
+        && data.keys().hasOnly(['token', 'tokenHash', 'active', 'version', 'createdAt', 'updatedAt'])
+        && data.active is bool
+        && data.version is int && data.version >= 0
+        && ( !('token' in data) || (data.token is string && data.token.size() <= 200) )
+        && ( !('tokenHash' in data) || (data.tokenHash is string && data.tokenHash.size() <= 128) );
+    }
+
+    function isValidGuestInvite(data) {
+      return data.keys().hasAll(['active', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['active', 'version', 'createdAt', 'updatedAt'])
+        && data.active is bool
+        && ( !('version' in data) || (data.version is int && data.version >= 1) );
+    }
+
+    match /app_config/{configId} {
+      allow read, list: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(configId) && isValidGuestInviteConfig(incoming()) && incoming().updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    match /guest_invites/{tokenHash} {
+      // Only exact-hash lookup by authenticated sessions (to validate a presented invite token); never allow listing/enumeration.
+      allow get: if isSignedIn() && isValidId(tokenHash);
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidId(tokenHash) && isValidGuestInvite(incoming())
+                    && incoming().createdAt == request.time
+                    && incoming().updatedAt == request.time;
+      allow update: if isAdmin() && isValidId(tokenHash) && isValidGuestInvite(incoming())
+                    && incoming().createdAt == existing().createdAt
+                    && incoming().updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       
       // On create: Ordinary users can ONLY set isPaid: false (or omit it) and role: 'customer'.
-      // Only the admin can create an account with isPaid: true or role: 'admin'.
+      // Admin and the recognized WiseBloom guest account are granted access.
       allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId
                     && isValidUserProfile(incoming())
                     && incoming().createdAt == request.time
                     && incoming().updatedAt == request.time
-                    && ( !('isPaid' in incoming()) || incoming().isPaid == false || isAdmin() )
-                    && ( !('role' in incoming()) || incoming().role == 'customer' || isAdmin() );
+                    && ( !('isPaid' in incoming()) || incoming().isPaid == false || isAdmin() || isGuest() )
+                    && ( !('role' in incoming()) || incoming().role == 'customer' || isAdmin() || (isGuest() && incoming().role == 'guest') );
                     
       // On update: Ordinary users CANNOT change their isPaid status, role, or stripeCustomerId.
-      // incoming().isPaid must equal existing().isPaid unless the request is made by the admin.
+      // Admin can update any user to reset guest data or manage roles.
       allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin())
                     && isValidUserProfile(incoming())
                     && incoming().createdAt == existing().createdAt
                     && incoming().updatedAt == request.time
-                    && ( incoming().isPaid == existing().isPaid || isAdmin() )
-                    && ( incoming().role == existing().role || isAdmin() )
+                    && ( incoming().isPaid == existing().isPaid || isAdmin() || isGuest() )
+                    && ( incoming().role == existing().role || isAdmin() || (isGuest() && incoming().role == 'guest') )
                     && ( !('stripeCustomerId' in incoming()) || incoming().stripeCustomerId == existing().stripeCustomerId || isAdmin() );
                     
       allow delete: if isAdmin();

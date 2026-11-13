@@ -149,7 +149,7 @@ export default function WelcomeScreen({ onNavigate, user, onSignInClick }: Welco
             </button>
           ) : (
             <span className="text-[11px] text-[#556953]/80">
-              Signed in as <strong className="text-[#1A2622]">{user.email}</strong>
+              Signed in as <strong className="text-[#1A2622]">{user.email || 'WiseBloom Guest Pass'}</strong>
             </span>
           )}
         </div>

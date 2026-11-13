@@ -26,7 +26,17 @@ import AuthScreen from './components/AuthScreen';
 import AccessPendingScreen from './components/AccessPendingScreen';
 import { Screen, UserProfile, RoutineState, RoutineSlot } from './types';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, logout, ensureUserProfileDoc, isOwnerUser } from './firebase';
+import { 
+  auth, 
+  logout, 
+  ensureUserProfileDoc, 
+  isOwnerUser, 
+  isGuestUser, 
+  resetGuestAccountData,
+  redeemGuestInvite,
+  getStoredGuestPass,
+  clearStoredGuestPass
+} from './firebase';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
@@ -38,8 +48,45 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userAccount, setUserAccount] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [isServerVerifiedGuest, setIsServerVerifiedGuest] = useState(false);
+
+  const pendingInviteTokenRef = React.useRef<string | null>(
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('invite') : null
+  );
+  const isRedeemingInviteRef = React.useRef<boolean>(false);
+  const [inviteProcessing, setInviteProcessing] = useState<boolean>(() => Boolean(pendingInviteTokenRef.current));
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const isRefreshingRef = React.useRef(false);
+
+  const lastGuestVerifyAtRef = React.useRef<number>(0);
+
+  const verifyServerSession = React.useCallback(async (user: User, idToken?: string) => {
+    try {
+      let token = idToken || (await user.getIdToken());
+      const guestPass = getStoredGuestPass(user.uid);
+      let res = await fetch('/api/auth/verify-session', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...(guestPass ? { 'X-Guest-Pass': guestPass } : {})
+        }
+      });
+      if (res.status === 401 && !idToken) {
+        token = await user.getIdToken(true);
+        res = await fetch('/api/auth/verify-session', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            ...(guestPass ? { 'X-Guest-Pass': guestPass } : {})
+          }
+        });
+      }
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      console.warn('Session check warning:', e);
+      return null;
+    }
+  }, []);
 
   const refreshUserAccount = React.useCallback(async () => {
     if (!auth.currentUser || isRefreshingRef.current) return null;
@@ -59,18 +106,21 @@ export default function App() {
       setUserAccount(profileDoc);
 
       // 5. Query /api/auth/verify-session on our server
-      let serverResult: any = null;
-      try {
-        const res = await fetch('/api/auth/verify-session', {
-          headers: { 'Authorization': `Bearer ${idToken}` }
-        });
-        serverResult = await res.json();
-      } catch (e) {
-        console.warn('Session check warning:', e);
+      const serverResult = await verifyServerSession(auth.currentUser, idToken);
+      const verifiedGuest = Boolean(serverResult?.user?.isInvitedGuest && serverResult?.user?.isPaid);
+      setIsServerVerifiedGuest(verifiedGuest);
+      if (auth.currentUser.isAnonymous && serverResult && !verifiedGuest) {
+        clearStoredGuestPass(auth.currentUser.uid);
       }
 
       const isOwner = isOwnerUser(auth.currentUser);
-      const isPaid = isOwner || profileDoc?.isPaid === true || serverResult?.user?.isPaid === true;
+      const isLegacyGuest = isGuestUser(auth.currentUser);
+      const isPaid = Boolean(
+        isOwner ||
+        isLegacyGuest ||
+        verifiedGuest ||
+        (!auth.currentUser.isAnonymous && (profileDoc?.isPaid === true || serverResult?.user?.isPaid === true))
+      );
 
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -87,13 +137,34 @@ export default function App() {
     } finally {
       isRefreshingRef.current = false;
     }
-  }, []);
+  }, [verifyServerSession]);
 
-  // Auto-refresh when user switches back to the app window/tab after clicking verification link
+  const recheckGuestAccess = React.useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user || !user.isAnonymous || isRedeemingInviteRef.current) return;
+    const now = Date.now();
+    if (now - lastGuestVerifyAtRef.current < 3000) return;
+    lastGuestVerifyAtRef.current = now;
+
+    const serverResult = await verifyServerSession(user);
+    if (!serverResult) return;
+
+    const verifiedGuest = Boolean(serverResult?.user?.isInvitedGuest && serverResult?.user?.isPaid);
+    setIsServerVerifiedGuest(verifiedGuest);
+    if (!verifiedGuest) {
+      clearStoredGuestPass(user.uid);
+    }
+  }, [verifyServerSession]);
+
+  // Auto-refresh when user switches back to the app window/tab
   React.useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && auth.currentUser) {
-        refreshUserAccount().catch(() => {});
+        if (auth.currentUser.isAnonymous) {
+          recheckGuestAccess().catch(() => {});
+        } else {
+          refreshUserAccount().catch(() => {});
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
@@ -102,7 +173,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', handleVisibility);
     };
-  }, [refreshUserAccount]);
+  }, [refreshUserAccount, recheckGuestAccess]);
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -111,24 +182,90 @@ export default function App() {
         try {
           const profileDoc = await ensureUserProfileDoc(user);
           setUserAccount(profileDoc);
+          if (!isRedeemingInviteRef.current) {
+            const serverResult = await verifyServerSession(user);
+            const verifiedGuest = Boolean(serverResult?.user?.isInvitedGuest && serverResult?.user?.isPaid);
+            setIsServerVerifiedGuest(verifiedGuest);
+            if (user.isAnonymous && serverResult && !verifiedGuest && !pendingInviteTokenRef.current) {
+              clearStoredGuestPass(user.uid);
+            }
+          }
         } catch (e) {
           console.error('Error syncing user account doc:', e);
         }
       } else {
         setUserAccount(null);
+        setIsServerVerifiedGuest(false);
       }
       setAuthLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [verifyServerSession]);
 
   const isOwner = isOwnerUser(currentUser);
-  // Server-verified owner access & database-verified customer access:
-  // The app owner has full access verified by their Firebase UID.
-  // Customers require verified isPaid === true in Firestore.
-  const isAccountPaid = Boolean(isOwner || userAccount?.isPaid === true);
+  const isGuest = isGuestUser(currentUser) || isServerVerifiedGuest;
+  // Server-verified owner access, invited guest access, legacy guest access, & database-verified customer access:
+  const isAccountPaid = Boolean(
+    isOwner ||
+    isGuestUser(currentUser) ||
+    isServerVerifiedGuest ||
+    (!currentUser?.isAnonymous && userAccount?.isPaid === true)
+  );
 
-  // When user is authenticated and verified paid (or owner), advance past pending/auth screen
+  // Process one-click guest invitation links (?invite=...) once Firebase Auth initializes
+  React.useEffect(() => {
+    if (authLoading || !pendingInviteTokenRef.current) return;
+
+    const inviteToken = pendingInviteTokenRef.current;
+    pendingInviteTokenRef.current = null;
+
+    // Clean ?invite= from the browser address bar
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('invite');
+      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    } catch {
+      // Ignore URL history errors
+    }
+
+    // Preserve existing Owner or Paid Customer sessions without switching them to guest
+    if (currentUser && (isOwnerUser(currentUser) || (!currentUser.isAnonymous && userAccount?.isPaid === true))) {
+      setCurrentScreen('home');
+      setHistory(['home']);
+      setInviteProcessing(false);
+      return;
+    }
+
+    let cancelled = false;
+    isRedeemingInviteRef.current = true;
+    (async () => {
+      try {
+        const res = await redeemGuestInvite(inviteToken);
+        if (cancelled) return;
+        setCurrentUser(res.user);
+        setIsServerVerifiedGuest(true);
+        setInviteError(null);
+        setCurrentScreen('home');
+        setHistory(['home']);
+      } catch (err: any) {
+        if (cancelled) return;
+        setIsServerVerifiedGuest(false);
+        setInviteError(err?.message || 'This guest invitation link is invalid or has been revoked.');
+        setCurrentScreen('auth');
+      } finally {
+        isRedeemingInviteRef.current = false;
+        if (!cancelled) {
+          setInviteProcessing(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, currentUser, userAccount]);
+
+  // When user is authenticated and verified paid, owner, or guest, advance past pending/auth screen
   React.useEffect(() => {
     if (currentUser && isAccountPaid) {
       if (currentScreen === 'access_pending' || currentScreen === 'auth') {
@@ -136,6 +273,21 @@ export default function App() {
       }
     }
   }, [currentUser, isAccountPaid, currentScreen]);
+
+  const getProfileStorageKey = React.useCallback((u?: User | null) => {
+    if (u?.isAnonymous && u?.uid) return `boots_skin_decoder_profile_${u.uid}`;
+    return isGuestUser(u) ? 'boots_skin_decoder_profile_guest' : 'boots_skin_decoder_profile';
+  }, []);
+
+  const getFavoritesStorageKey = React.useCallback((u?: User | null) => {
+    if (u?.isAnonymous && u?.uid) return `boots_skin_decoder_favorites_${u.uid}`;
+    return isGuestUser(u) ? 'boots_skin_decoder_favorites_guest' : 'boots_skin_decoder_favorites';
+  }, []);
+
+  const getRoutineStorageKey = React.useCallback((u?: User | null) => {
+    if (u?.isAnonymous && u?.uid) return `boots_skin_decoder_routine_${u.uid}`;
+    return isGuestUser(u) ? 'boots_skin_decoder_routine_guest' : 'boots_skin_decoder_routine';
+  }, []);
   
   // User Profile State
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
@@ -146,6 +298,66 @@ export default function App() {
       return { barrierType: null, concerns: [], recommendedIngredients: [] };
     }
   });
+
+  // Favorites State with localStorage persistence for safe, durable user sessions
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('boots_skin_decoder_favorites');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Routine State with localStorage persistence
+  const [routine, setRoutine] = useState<RoutineState>(() => {
+    try {
+      const saved = localStorage.getItem('boots_skin_decoder_routine');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Synchronize data for active user (and auto-purge guest data if server flagged a reset)
+  React.useEffect(() => {
+    const profKey = getProfileStorageKey(currentUser);
+    const favKey = getFavoritesStorageKey(currentUser);
+    const routKey = getRoutineStorageKey(currentUser);
+
+    if (isGuestUser(currentUser) && userAccount?.lastResetAt) {
+      const localReset = localStorage.getItem('boots_skin_decoder_guest_last_reset');
+      if (localReset !== userAccount.lastResetAt) {
+        localStorage.removeItem(profKey);
+        localStorage.removeItem(favKey);
+        localStorage.removeItem(routKey);
+        localStorage.removeItem('boots_skin_decoder_scans_guest');
+        localStorage.removeItem('boots_skin_decoder_notes_guest');
+        localStorage.setItem('boots_skin_decoder_guest_last_reset', userAccount.lastResetAt);
+      }
+    }
+
+    try {
+      const p = localStorage.getItem(profKey);
+      setUserProfile(p ? JSON.parse(p) : { barrierType: null, concerns: [], recommendedIngredients: [] });
+    } catch {
+      setUserProfile({ barrierType: null, concerns: [], recommendedIngredients: [] });
+    }
+
+    try {
+      const f = localStorage.getItem(favKey);
+      setFavorites(f ? JSON.parse(f) : []);
+    } catch {
+      setFavorites([]);
+    }
+
+    try {
+      const r = localStorage.getItem(routKey);
+      setRoutine(r ? JSON.parse(r) : {});
+    } catch {
+      setRoutine({});
+    }
+  }, [currentUser, userAccount?.lastResetAt, getProfileStorageKey, getFavoritesStorageKey, getRoutineStorageKey]);
 
   const handleUpdateProfile = React.useCallback((updates: Partial<UserProfile>) => {
     setUserProfile((prev) => {
@@ -178,33 +390,13 @@ export default function App() {
       };
 
       try {
-        localStorage.setItem('boots_skin_decoder_profile', JSON.stringify(next));
+        localStorage.setItem(getProfileStorageKey(currentUser), JSON.stringify(next));
       } catch (err) {
         console.error('Failed to save profile to localStorage', err);
       }
       return next;
     });
-  }, []);
-
-  // Favorites State with localStorage persistence for safe, durable user sessions
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('boots_skin_decoder_favorites');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  // Routine State with localStorage persistence
-  const [routine, setRoutine] = useState<RoutineState>(() => {
-    try {
-      const saved = localStorage.getItem('boots_skin_decoder_routine');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  }, [currentUser, getProfileStorageKey]);
 
   const handleUpdateRoutine = (ingredientId: string, slot: RoutineSlot) => {
     setRoutine((prev) => {
@@ -215,7 +407,7 @@ export default function App() {
         updated[ingredientId] = slot;
       }
       try {
-        localStorage.setItem('boots_skin_decoder_routine', JSON.stringify(updated));
+        localStorage.setItem(getRoutineStorageKey(currentUser), JSON.stringify(updated));
       } catch (err) {
         console.error('Failed to save routine to localStorage', err);
       }
@@ -226,7 +418,7 @@ export default function App() {
   const handleClearRoutine = () => {
     setRoutine({});
     try {
-      localStorage.removeItem('boots_skin_decoder_routine');
+      localStorage.removeItem(getRoutineStorageKey(currentUser));
     } catch (err) {
       console.error('Failed to clear routine in localStorage', err);
     }
@@ -241,13 +433,23 @@ export default function App() {
         updated = [...prev, id];
       }
       try {
-        localStorage.setItem('boots_skin_decoder_favorites', JSON.stringify(updated));
+        localStorage.setItem(getFavoritesStorageKey(currentUser), JSON.stringify(updated));
       } catch (err) {
         console.error('Failed to save favorites to localStorage', err);
       }
       return updated;
     });
   };
+
+  const handleResetGuestData = React.useCallback(async () => {
+    await resetGuestAccountData();
+    // If the active user right now happens to be the guest, immediately clear state in memory
+    if (isGuestUser(currentUser)) {
+      setUserProfile({ barrierType: null, concerns: [], recommendedIngredients: [] });
+      setFavorites([]);
+      setRoutine({});
+    }
+  }, [currentUser]);
   
   // Custom back-stack history array to simulate true Android system back behaviour
   const [history, setHistory] = useState<Screen[]>(['welcome']);
@@ -277,6 +479,23 @@ export default function App() {
 
   // Safe router rendering the accurate views inside the simulated Android phone frame
   const renderScreen = () => {
+    // 0. Processing private guest invitation link
+    if (inviteProcessing) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center bg-[#F9F7F3] text-[#1A2622] px-6 text-center">
+          <div className="w-12 h-12 rounded-full bg-[#D1DEC8] flex items-center justify-center mb-4 animate-pulse">
+            <span className="font-serif text-lg font-bold text-[#4A5D48]">W</span>
+          </div>
+          <h2 className="font-serif text-xl font-medium text-[#1A2622] mb-1">
+            Opening Your Guest Pass
+          </h2>
+          <p className="text-xs text-[#556953]">
+            Verifying your private WiseBloom invitation...
+          </p>
+        </div>
+      );
+    }
+
     // 1. Welcome Screen is accessible to everyone
     if (currentScreen === 'welcome') {
       return (
@@ -293,6 +512,7 @@ export default function App() {
       return (
         <AuthScreen 
           onSuccess={() => {
+            setInviteError(null);
             if (isAccountPaid) {
               navigateTo('home');
             } else {
@@ -300,15 +520,17 @@ export default function App() {
             }
           }}
           onBackToWelcome={() => navigateTo('welcome')}
+          initialNotice={inviteError}
         />
       );
     }
 
-    // 3. Gatekeeper check: Unauthenticated users are directed to the Auth screen
-    if (!currentUser) {
+    // 3. Gatekeeper check: Unauthenticated users (or unverified anonymous sessions) are directed to the Auth screen
+    if (!currentUser || (currentUser.isAnonymous && !isAccountPaid)) {
       return (
         <AuthScreen 
           onSuccess={() => {
+            setInviteError(null);
             if (isAccountPaid) {
               navigateTo('home');
             } else {
@@ -316,6 +538,12 @@ export default function App() {
             }
           }}
           onBackToWelcome={() => navigateTo('welcome')}
+          initialNotice={
+            inviteError ||
+            (currentUser?.isAnonymous && !authLoading
+              ? 'Your guest invitation link is no longer active. Please ask WiseBloom for a new link or sign in with your account.'
+              : null)
+          }
         />
       );
     }
@@ -531,15 +759,18 @@ export default function App() {
 
   return (
     <PhoneContainer screen={currentScreen}>
-      {currentScreen !== 'welcome' && currentScreen !== 'auth' && currentScreen !== 'access_pending' && (
+      {!inviteProcessing && currentScreen !== 'welcome' && currentScreen !== 'auth' && currentScreen !== 'access_pending' && !(currentUser?.isAnonymous && !isAccountPaid) && (
         <HeaderMenu 
           currentScreen={currentScreen}
           onNavigate={navigateTo}
           onGoBack={handleBack}
           hasBarrierQuizAnswers={Object.keys(quizAnswers).length > 0}
           user={currentUser}
+          isOwner={isOwner}
+          onResetGuestData={handleResetGuestData}
           onSignOut={async () => {
             await logout();
+            setIsServerVerifiedGuest(false);
             navigateTo('welcome');
           }}
           onSignInClick={() => navigateTo('auth')}

@@ -12,6 +12,10 @@
         "isPaid": { "type": "boolean" },
         "role": { "type": "string" },
         "stripeCustomerId": { "type": "string" },
+        "favorites": { "type": "array", "items": { "type": "string" } },
+        "routine": { "type": "object" },
+        "notes": { "type": "array" },
+        "lastResetAt": { "type": "string" },
         "createdAt": { "type": "timestamp" },
         "updatedAt": { "type": "timestamp" }
       },
@@ -30,6 +34,32 @@
         "updatedAt": { "type": "timestamp" }
       },
       "required": ["userId", "productName", "createdAt", "updatedAt"]
+    },
+    "GuestInviteConfig": {
+      "title": "GuestInviteConfig",
+      "description": "Owner-only active guest invitation configuration",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string" },
+        "tokenHash": { "type": "string" },
+        "active": { "type": "boolean" },
+        "version": { "type": "integer" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["active", "version", "updatedAt"]
+    },
+    "GuestInvite": {
+      "title": "GuestInvite",
+      "description": "Hashed guest invitation status record for server verification",
+      "type": "object",
+      "properties": {
+        "active": { "type": "boolean" },
+        "version": { "type": "integer" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "required": ["active", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -40,6 +70,14 @@
     "/users/{userId}/scans/{scanId}": {
       "schema": { "$ref": "#/entities/Scan" },
       "description": "Saved product scans"
+    },
+    "/app_config/{configId}": {
+      "schema": { "$ref": "#/entities/GuestInviteConfig" },
+      "description": "Owner-only application configuration documents"
+    },
+    "/guest_invites/{tokenHash}": {
+      "schema": { "$ref": "#/entities/GuestInvite" },
+      "description": "Hashed guest invitation records"
     }
   }
 }

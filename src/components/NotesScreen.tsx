@@ -25,11 +25,14 @@ interface NotesScreenProps {
   onGoBack: () => void;
 }
 
+import { getNotesStorageKey } from '../firebase';
+
 export default function NotesScreen({ onNavigate, onGoBack }: NotesScreenProps) {
-  // Load journal entries from localStorage
+  // Load journal entries from scoped localStorage
   const [entries, setEntries] = useState<JournalEntry[]>(() => {
     try {
-      const saved = localStorage.getItem('boots_skin_decoder_notes');
+      const storageKey = getNotesStorageKey();
+      const saved = localStorage.getItem(storageKey);
       return saved ? JSON.parse(saved) : [
         {
           id: 'sample_1',
@@ -61,10 +64,11 @@ export default function NotesScreen({ onNavigate, onGoBack }: NotesScreenProps) 
   const [showForm, setShowForm] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Persist entries to localStorage
+  // Persist entries to scoped localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('boots_skin_decoder_notes', JSON.stringify(entries));
+      const storageKey = getNotesStorageKey();
+      localStorage.setItem(storageKey, JSON.stringify(entries));
     } catch (err) {
       console.error('Failed to save notes to localStorage', err);
     }

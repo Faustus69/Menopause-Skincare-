@@ -30,11 +30,12 @@ import {
 interface AuthScreenProps {
   onSuccess: () => void;
   onBackToWelcome?: () => void;
+  initialNotice?: string | null;
 }
 
 type AuthMode = 'signin' | 'register' | 'forgot_password';
 
-export default function AuthScreen({ onSuccess, onBackToWelcome }: AuthScreenProps) {
+export default function AuthScreen({ onSuccess, onBackToWelcome, initialNotice }: AuthScreenProps) {
   const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,8 +43,14 @@ export default function AuthScreen({ onSuccess, onBackToWelcome }: AuthScreenPro
   const [showPassword, setShowPassword] = useState(false);
   
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(initialNotice || null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (initialNotice) {
+      setErrorMsg(initialNotice);
+    }
+  }, [initialNotice]);
 
   const clearMessages = () => {
     setErrorMsg(null);
