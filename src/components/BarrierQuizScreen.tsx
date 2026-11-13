@@ -101,7 +101,7 @@ export default function BarrierQuizScreen({ onNavigate, onSetResults, onGoBack }
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      className="flex flex-col min-h-full pb-8 select-none bg-[#FAF9F6]"
+      className="flex-1 flex flex-col min-h-full pb-8 select-none bg-[#FAF9F6]"
     >
       {/* Dynamic Header bar */}
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 border-b border-stone-200/10 font-sans">
@@ -150,7 +150,7 @@ export default function BarrierQuizScreen({ onNavigate, onSetResults, onGoBack }
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -15 }}
               transition={{ duration: 0.25 }}
-              className="bg-white p-6 sm:p-7 rounded-[24px] border border-stone-200 shadow-md text-center max-w-[540px] mx-auto w-full flex flex-col justify-center min-h-[220px]"
+              className="bg-white p-6 sm:p-7 rounded-[24px] border border-stone-200 shadow-md text-center max-w-[460px] mx-auto w-full flex flex-col justify-center min-h-[220px]"
             >
               <div className="text-stone-300 mb-3 flex justify-center">
                 <HelpCircle className="w-10 h-10 text-[#C5A059]" />
@@ -163,7 +163,7 @@ export default function BarrierQuizScreen({ onNavigate, onSetResults, onGoBack }
         </div>
 
         {/* Huge, Touch-safe Controls */}
-        <div className="mt-8 flex flex-col gap-3 max-w-[540px] mx-auto w-full">
+        <div className="mt-8 flex flex-col gap-3 max-w-[460px] mx-auto w-full">
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={() => handleAnswer(true)}

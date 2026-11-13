@@ -19,7 +19,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -15 }}
       transition={{ duration: 0.5, ease: 'easeOut' }}
-      className="flex flex-col min-h-full px-4 sm:px-6 py-6 sm:py-8 justify-between relative overflow-hidden bg-[#F9F7F3]"
+      className="flex-1 flex flex-col min-h-full px-4 sm:px-6 py-6 sm:py-8 justify-between relative overflow-hidden bg-[#F9F7F3]"
     >
       {/* Decorative background blobs to simulate watercolor */}
       <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-[#E2C7C1] opacity-20 blur-[80px] pointer-events-none"></div>
@@ -56,7 +56,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         <div className="w-16 h-[2px] bg-[#6D8A68]/40 mx-auto mt-6 mb-8 rounded-full"></div>
 
         {/* Options buttons */}
-        <div className="flex flex-col gap-4 max-w-[540px] mx-auto w-full">
+        <div className="flex flex-col gap-4 max-w-[460px] mx-auto w-full">
 
           {/* Action Button 1: How to use */}
           <motion.button

@@ -83,10 +83,10 @@ export default function PhoneContainer({ children, screen }: PhoneContainerProps
           <div className="w-2.5 h-2.5 bg-[#141C2B] rounded-full mx-auto mt-0.5 border border-neutral-700/60 font-sans"></div>
         </div>
 
-        {/* Android system top status bar */}
+        {/* Android system top status bar (desktop simulator only) */}
         <div 
           id="android_status_bar"
-          className="bg-[hsl(var(--primary))] text-stone-200 px-4 sm:px-6 pt-3 pb-2 flex justify-between items-center text-xs font-mono tracking-wider z-20 shrink-0 select-none"
+          className="phone-desktop-only-flex bg-[hsl(var(--primary))] text-stone-200 px-6 pt-3 pb-2 justify-between items-center text-xs font-mono tracking-wider z-20 shrink-0 select-none"
         >
           {/* Active Time */}
           <span className="font-semibold text-[11px] font-sans text-stone-100">{time || '12:00 PM'}</span>

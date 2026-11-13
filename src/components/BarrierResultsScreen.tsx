@@ -101,7 +101,7 @@ export default function BarrierResultsScreen({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex flex-col min-h-full pb-10 bg-[#FAF9F6] select-none"
+      className="flex-1 flex flex-col min-h-full pb-10 bg-[#FAF9F6] select-none"
     >
       {/* Header bar */}
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 border-b border-stone-200/10 font-sans">

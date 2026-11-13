@@ -136,7 +136,7 @@ export default function NotesScreen({ onNavigate, onGoBack }: NotesScreenProps) 
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -15 }}
       transition={{ duration: 0.4 }}
-      className="flex flex-col min-h-full"
+      className="flex-1 flex flex-col min-h-full"
     >
       {/* Decorative Elegant Soft Spots */}
       <div className="absolute top-12 right-0 w-32 h-32 bg-[#F3E1D3]/50 rounded-full blur-2xl pointer-events-none"></div>

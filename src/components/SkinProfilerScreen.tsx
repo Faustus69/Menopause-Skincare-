@@ -131,7 +131,7 @@ export default function SkinProfilerScreen({ onNavigate, onGoBack, userProfile, 
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="flex flex-col min-h-full pb-8 bg-[#FAF9F6]"
+      className="flex-1 flex flex-col min-h-full pb-8 bg-[#FAF9F6]"
     >
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30">
         <div className="flex items-center">

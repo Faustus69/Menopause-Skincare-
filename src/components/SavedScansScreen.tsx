@@ -113,7 +113,7 @@ export default function SavedScansScreen({ onNavigate }: SavedScansScreenProps) 
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col min-h-full bg-[#FAF9F6] pb-10"
+      className="flex-1 flex flex-col min-h-full bg-[#FAF9F6] pb-10"
     >
       <div className="sticky top-0 z-10 bg-[#FAF9F6]/90 backdrop-blur-md px-5 py-4 border-b border-[#E2B4BD]/20 flex items-center justify-between">
         <h1 className="text-lg font-serif font-bold text-[#1B263B]">Saved Scans</h1>

@@ -67,6 +67,7 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   width: 100%;
+  min-height: 100%;
   overflow-x: clip;
 }
 
@@ -78,18 +79,24 @@ body {
   padding: 0;
   width: 100%;
   min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   overflow-x: clip;
 }
 
 #root {
   width: 100%;
   min-height: 100dvh;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Mobile-first shell: use full viewport width and height on all phones and touch devices */
 .phone-stage {
   min-height: 100dvh;
   width: 100%;
+  flex: 1 1 auto;
   background-color: hsl(var(--background));
   display: flex;
   flex-direction: column;
@@ -137,18 +144,18 @@ body {
   .phone-stage {
     align-items: center;
     justify-content: center;
-    padding: 2.5rem 1rem;
+    padding: 1.5rem 1rem;
     background-color: #f5f5f4;
   }
 
   .phone-shell {
-    max-width: 412px;
-    height: 840px;
+    max-width: 400px;
+    height: min(740px, calc(100dvh - 3rem));
     min-height: 0;
     flex: none;
-    border-radius: 40px;
+    border-radius: 36px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    border: 12px solid hsl(var(--primary));
+    border: 10px solid hsl(var(--primary));
     overflow: hidden;
   }
 

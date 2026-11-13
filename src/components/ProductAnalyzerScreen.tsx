@@ -363,7 +363,7 @@ export default function ProductAnalyzerScreen({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
-      className="flex flex-col min-h-full pb-8"
+      className="flex-1 flex flex-col min-h-full pb-8"
     >
       {/* Sticky Header */}
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 border-b border-stone-200/10 select-none">

@@ -68,7 +68,7 @@ export default function IngredientDetailScreen({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
-      className="flex flex-col min-h-full pb-10"
+      className="flex-1 flex flex-col min-h-full pb-10"
     >
       {/* Header element */}
       <div className="bg-[#1B263B] text-stone-100 py-4 px-6 flex items-center justify-between shadow-sm sticky top-0 z-30 border-b border-stone-200/10 select-none font-sans">

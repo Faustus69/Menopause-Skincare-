@@ -144,14 +144,14 @@ export default function AuthScreen({ onSuccess, onBackToWelcome, initialNotice }
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex flex-col min-h-full bg-[#F9F7F3] text-[#1A2622] relative overflow-hidden px-3.5 py-5 sm:px-4 sm:py-6"
+      className="flex-1 flex flex-col min-h-full bg-[#F9F7F3] text-[#1A2622] relative overflow-hidden px-4 py-5 sm:px-5 sm:py-6"
     >
       {/* Decorative watercolor blobs */}
       <div className="absolute top-[-10%] left-[-10%] w-[50vw] max-w-[220px] h-[50vw] max-h-[220px] rounded-full bg-[#E2C7C1] opacity-25 blur-[70px] pointer-events-none"></div>
       <div className="absolute top-[30%] right-[-10%] w-[45vw] max-w-[200px] h-[45vw] max-h-[200px] rounded-full bg-[#C9D6C3] opacity-35 blur-[70px] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] left-[10%] w-[60vw] max-w-[240px] h-[60vw] max-h-[240px] rounded-full bg-[#E2C7C1] opacity-20 blur-[80px] pointer-events-none"></div>
 
-      <div className="w-full max-w-[520px] mx-auto flex-1 flex flex-col justify-center relative z-10">
+      <div className="w-full max-w-[460px] mx-auto flex-1 flex flex-col justify-center relative z-10">
         
         {/* Top Back Navigation if available */}
         {onBackToWelcome && (

@@ -21,7 +21,7 @@ export default function WelcomeScreen({ onNavigate, user, onSignInClick }: Welco
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex flex-col min-h-full bg-[#F9F7F3] text-[#1A2622] relative overflow-hidden"
+      className="flex-1 flex flex-col min-h-full bg-[#F9F7F3] text-[#1A2622] relative overflow-hidden"
     >
       {/* Decorative background blobs to simulate watercolor */}
       <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] rounded-full bg-[#E2C7C1] opacity-20 blur-[80px] pointer-events-none"></div>
@@ -29,7 +29,7 @@ export default function WelcomeScreen({ onNavigate, user, onSignInClick }: Welco
       <div className="absolute bottom-[20%] left-[-10%] w-[70vw] h-[70vw] rounded-full bg-[#E2C7C1] opacity-20 blur-[80px] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-[#C9D6C3] opacity-30 blur-[80px] pointer-events-none"></div>
 
-      <div className="flex-1 flex flex-col justify-center max-w-[540px] mx-auto w-full py-6 sm:py-8 px-4 sm:px-6 relative z-10">
+      <div className="flex-1 flex flex-col justify-center max-w-[460px] mx-auto w-full py-6 sm:py-8 px-4 sm:px-6 relative z-10">
         
         {/* Header */}
         <div className="mb-10 text-center flex flex-col items-center">

@@ -68,13 +68,13 @@ export default function AccessPendingScreen({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex flex-col min-h-full w-full bg-[#F9F7F3] text-[#1A2622] relative overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 box-border select-none"
+      className="flex-1 flex flex-col min-h-full w-full bg-[#F9F7F3] text-[#1A2622] relative overflow-x-hidden px-4 py-6 sm:px-6 sm:py-8 box-border select-none"
     >
       {/* Decorative watercolor blobs (fully constrained to avoid mobile overflow) */}
       <div className="absolute top-[-10%] left-[-10%] w-[50vw] max-w-[200px] h-[50vw] max-h-[200px] rounded-full bg-[#E2C7C1] opacity-25 blur-[50px] pointer-events-none"></div>
       <div className="absolute top-[35%] right-[-10%] w-[40vw] max-w-[180px] h-[40vw] max-h-[180px] rounded-full bg-[#C9D6C3] opacity-30 blur-[50px] pointer-events-none"></div>
 
-      <div className="w-full max-w-[520px] mx-auto flex-1 flex flex-col justify-center relative z-10 box-border">
+      <div className="w-full max-w-[460px] mx-auto flex-1 flex flex-col justify-center relative z-10 box-border">
 
         {/* Brand Header */}
         <div className="text-center mb-5 sm:mb-6">
