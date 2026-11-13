@@ -29,7 +29,7 @@ export default function WelcomeScreen({ onNavigate, user, onSignInClick }: Welco
       <div className="absolute bottom-[20%] left-[-10%] w-[70vw] h-[70vw] rounded-full bg-[#E2C7C1] opacity-20 blur-[80px] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-[#C9D6C3] opacity-30 blur-[80px] pointer-events-none"></div>
 
-      <div className="flex-1 flex flex-col justify-center max-w-[360px] mx-auto w-full py-8 px-4 relative z-10">
+      <div className="flex-1 flex flex-col justify-center max-w-[540px] mx-auto w-full py-6 sm:py-8 px-4 sm:px-6 relative z-10">
         
         {/* Header */}
         <div className="mb-10 text-center flex flex-col items-center">
@@ -135,7 +135,7 @@ export default function WelcomeScreen({ onNavigate, user, onSignInClick }: Welco
                 onNavigate('home');
               }
             }}
-            className="w-[280px] bg-[#67795E] hover:bg-[#5A6A52] text-white py-4 px-8 rounded-full font-sans font-medium text-[15px] tracking-[0.1em] transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-3 cursor-pointer uppercase"
+            className="w-full max-w-[360px] bg-[#67795E] hover:bg-[#5A6A52] text-white py-4 px-8 rounded-full font-sans font-medium text-[15px] tracking-[0.1em] transition-all active:scale-[0.98] shadow-md flex items-center justify-center gap-3 cursor-pointer uppercase"
           >
             {user ? "Let's dive in" : "Sign In & Enter"} <ArrowRight className="w-5 h-5 stroke-[2]" />
           </button>

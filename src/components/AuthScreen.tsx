@@ -151,7 +151,7 @@ export default function AuthScreen({ onSuccess, onBackToWelcome, initialNotice }
       <div className="absolute top-[30%] right-[-10%] w-[45vw] max-w-[200px] h-[45vw] max-h-[200px] rounded-full bg-[#C9D6C3] opacity-35 blur-[70px] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] left-[10%] w-[60vw] max-w-[240px] h-[60vw] max-h-[240px] rounded-full bg-[#E2C7C1] opacity-20 blur-[80px] pointer-events-none"></div>
 
-      <div className="w-full max-w-full sm:max-w-[380px] mx-auto flex-1 flex flex-col justify-center relative z-10">
+      <div className="w-full max-w-[520px] mx-auto flex-1 flex flex-col justify-center relative z-10">
         
         {/* Top Back Navigation if available */}
         {onBackToWelcome && (

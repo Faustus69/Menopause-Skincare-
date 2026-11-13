@@ -110,7 +110,7 @@ export default function BarrierQuizScreen({ onNavigate, onSetResults, onGoBack }
         </div>
       </div>
 
-      <div className="p-6 flex-1 flex flex-col justify-between">
+      <div className="p-4 sm:p-6 flex-1 flex flex-col justify-between">
         {/* Progress & Breadcrumbs */}
         <div>
           <div className="flex justify-between items-center mb-2">
@@ -150,7 +150,7 @@ export default function BarrierQuizScreen({ onNavigate, onSetResults, onGoBack }
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -15 }}
               transition={{ duration: 0.25 }}
-              className="bg-white p-7 rounded-[24px] border border-stone-200 shadow-md text-center max-w-sm mx-auto w-full flex flex-col justify-center min-h-[220px]"
+              className="bg-white p-6 sm:p-7 rounded-[24px] border border-stone-200 shadow-md text-center max-w-[540px] mx-auto w-full flex flex-col justify-center min-h-[220px]"
             >
               <div className="text-stone-300 mb-3 flex justify-center">
                 <HelpCircle className="w-10 h-10 text-[#C5A059]" />
@@ -163,7 +163,7 @@ export default function BarrierQuizScreen({ onNavigate, onSetResults, onGoBack }
         </div>
 
         {/* Huge, Touch-safe Controls */}
-        <div className="mt-8 flex flex-col gap-3 max-w-sm mx-auto w-full">
+        <div className="mt-8 flex flex-col gap-3 max-w-[540px] mx-auto w-full">
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={() => handleAnswer(true)}

@@ -62,12 +62,118 @@
   --color-gold: hsl(var(--gold));
 }
 
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  width: 100%;
+  overflow-x: clip;
+}
+
 body {
   background-color: var(--bg);
   color: hsl(var(--foreground));
   font-family: var(--font-sans);
   margin: 0;
   padding: 0;
+  width: 100%;
+  min-height: 100dvh;
+  overflow-x: clip;
+}
+
+#root {
+  width: 100%;
+  min-height: 100dvh;
+}
+
+/* Mobile-first shell: use full viewport width and height on all phones and touch devices */
+.phone-stage {
+  min-height: 100dvh;
+  width: 100%;
+  background-color: hsl(var(--background));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.phone-shell {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100dvh;
+  flex: 1 1 auto;
+  background-color: hsl(var(--background));
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow-x: clip;
+}
+
+.phone-desktop-only {
+  display: none;
+}
+
+.phone-desktop-only-flex {
+  display: none;
+}
+
+.phone-mobile-only {
+  display: block;
+}
+
+.phone-scroll-area {
+  overflow-x: clip;
+}
+
+.phone-back-to-top {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.25rem;
+}
+
+/* Show simulated phone frame ONLY on true desktop/laptop screens with fine pointer */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .phone-stage {
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1rem;
+    background-color: #f5f5f4;
+  }
+
+  .phone-shell {
+    max-width: 412px;
+    height: 840px;
+    min-height: 0;
+    flex: none;
+    border-radius: 40px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: 12px solid hsl(var(--primary));
+    overflow: hidden;
+  }
+
+  .phone-desktop-only {
+    display: block;
+  }
+
+  .phone-desktop-only-flex {
+    display: flex;
+  }
+
+  .phone-mobile-only {
+    display: none;
+  }
+
+  .phone-scroll-area {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .phone-back-to-top {
+    position: absolute;
+    bottom: 2rem;
+    right: 1.25rem;
+  }
 }
 
 .font-serif {

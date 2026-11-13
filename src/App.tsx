@@ -784,7 +784,7 @@ export default function App() {
           onSignInClick={() => navigateTo('auth')}
         />
       )}
-      <div className="flex-1 relative overflow-hidden flex flex-col">
+      <div className="flex-1 relative overflow-x-clip flex flex-col">
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
             key={currentScreen}
