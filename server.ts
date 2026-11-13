@@ -273,9 +273,12 @@ async function startServer() {
           saveInviteState(inviteState);
         }
         return isActive;
+      } else if (fsRes.status !== 404) {
+        const errBody = await fsRes.text().catch(() => '');
+        console.warn(`Firestore guest_invites lookup returned ${fsRes.status}:`, errBody);
       }
-    } catch {
-      // Fallback to local state if Firestore rules are not yet deployed or unreachable
+    } catch (err) {
+      console.warn('Firestore guest_invites lookup error:', err);
     }
     return false;
   }
@@ -286,7 +289,7 @@ async function startServer() {
     newHash: string | null,
     previousHash: string | null,
     version: number
-  ) {
+  ): Promise<{ ok: boolean; error?: string }> {
     try {
       const writes: any[] = [];
       const basePath = `projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DB_ID}/documents`;
@@ -346,26 +349,97 @@ async function startServer() {
         body: JSON.stringify({ writes })
       });
       if (!res.ok) {
+        const errText = await res.text().catch(() => '');
         // If previousHash didn't exist in Firestore yet, retry without the previousHash update
         if (previousHash) {
           const fallbackWrites = writes.slice(1);
-          await fetch(commitUrl, {
+          const fallbackRes = await fetch(commitUrl, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${ownerToken}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({ writes: fallbackWrites })
-          }).catch(() => {});
+          });
+          if (fallbackRes.ok) {
+            return { ok: true };
+          }
+          const fallbackErrText = await fallbackRes.text().catch(() => '');
+          console.error(`Firestore guest invite sync fallback failed (${fallbackRes.status}):`, fallbackErrText);
+          return {
+            ok: false,
+            error: `Could not save guest invitation to Firestore (HTTP ${fallbackRes.status}). Please verify Firestore security rules are deployed.`
+          };
         }
+        console.error(`Firestore guest invite sync failed (${res.status}):`, errText);
+        return {
+          ok: false,
+          error: `Could not save guest invitation to Firestore (HTTP ${res.status}). Please verify Firestore security rules are deployed.`
+        };
       }
-    } catch (err) {
-      console.warn('Firestore guest invite sync notice:', err);
+      return { ok: true };
+    } catch (err: any) {
+      console.error('Firestore guest invite sync error:', err);
+      return {
+        ok: false,
+        error: err?.message || 'Network error while saving guest invitation to Firestore.'
+      };
     }
   }
 
-  async function restoreInviteFromFirestoreIfMissing(ownerToken: string) {
-    if (inviteState.activeToken || inviteState.version > 0) return;
+  async function ensureActiveInviteInFirestore(ownerToken: string): Promise<{ ok: boolean; error?: string }> {
+    if (!inviteState.activeToken || !inviteState.activeTokenHash) {
+      return { ok: true };
+    }
+    try {
+      const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DB_ID}/documents/guest_invites/${inviteState.activeTokenHash}`;
+      const fsRes = await fetch(firestoreUrl, {
+        headers: { Authorization: `Bearer ${ownerToken}` }
+      });
+      if (fsRes.ok) {
+        const fsData = (await fsRes.json()) as any;
+        if (fsData?.fields?.active?.booleanValue === true) {
+          return { ok: true };
+        }
+        const revokedHash = inviteState.activeTokenHash;
+        inviteState.revokedHashes = [...inviteState.revokedHashes.slice(-99), revokedHash];
+        inviteStatusCache.set(revokedHash, { active: false, expiresAt: Date.now() + 60_000 });
+        inviteState = {
+          ...inviteState,
+          activeToken: null,
+          activeTokenHash: null,
+          version: 0,
+          updatedAt: new Date().toISOString()
+        };
+        saveInviteState(inviteState);
+        return await restoreInviteFromFirestoreIfMissing(ownerToken);
+      }
+      if (fsRes.status === 404) {
+        return await syncInviteToFirestore(
+          ownerToken,
+          inviteState.activeToken,
+          inviteState.activeTokenHash,
+          null,
+          Math.max(1, inviteState.version || 1)
+        );
+      }
+      const errText = await fsRes.text().catch(() => '');
+      console.error(`Firestore active invite verification failed (${fsRes.status}):`, errText);
+      return {
+        ok: false,
+        error: `Could not verify guest invitation in Firestore (HTTP ${fsRes.status}).`
+      };
+    } catch (err: any) {
+      console.error('Firestore active invite verification error:', err);
+      return {
+        ok: false,
+        error: err?.message || 'Network error while verifying guest invitation in Firestore.'
+      };
+    }
+  }
+
+  async function restoreInviteFromFirestoreIfMissing(ownerToken: string): Promise<{ ok: boolean; error?: string }> {
+    if (inviteState.activeToken || inviteState.version > 0) return { ok: true };
     try {
       const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/${FIRESTORE_DB_ID}/documents/app_config/guest_invite`;
       const res = await fetch(firestoreUrl, {
@@ -390,9 +464,23 @@ async function startServer() {
             saveInviteState(inviteState);
           }
         }
+        return { ok: true };
       }
-    } catch {
-      // Ignore if Firestore rules not deployed yet
+      if (res.status === 404) {
+        return { ok: true };
+      }
+      const errText = await res.text().catch(() => '');
+      console.error(`Firestore guest invite restore failed (${res.status}):`, errText);
+      return {
+        ok: false,
+        error: `Could not read guest invitation state from Firestore (HTTP ${res.status}).`
+      };
+    } catch (err: any) {
+      console.error('Firestore guest invite restore error:', err);
+      return {
+        ok: false,
+        error: err?.message || 'Network error while reading guest invitation from Firestore.'
+      };
     }
   }
 
@@ -512,12 +600,19 @@ async function startServer() {
         return res.status(403).json({ error: 'Unauthorized: Owner access required.' });
       }
 
-      await restoreInviteFromFirestoreIfMissing(token);
+      const restoreResult = await restoreInviteFromFirestoreIfMissing(token);
+      if (!restoreResult.ok) {
+        return res.status(502).json({ error: restoreResult.error || 'Failed to sync guest invitation state from Firestore.' });
+      }
 
       if (!inviteState.activeToken && inviteState.version === 0) {
         const newToken = crypto.randomBytes(24).toString('base64url');
         const newHash = sha256Hex(newToken);
         const nowIso = new Date().toISOString();
+        const syncResult = await syncInviteToFirestore(token, newToken, newHash, null, 1);
+        if (!syncResult.ok) {
+          return res.status(502).json({ error: syncResult.error || 'Failed to save guest invitation to Firestore.' });
+        }
         inviteState = {
           ...inviteState,
           activeToken: newToken,
@@ -527,7 +622,11 @@ async function startServer() {
         };
         saveInviteState(inviteState);
         inviteStatusCache.set(newHash, { active: true, expiresAt: Date.now() + 60_000 });
-        await syncInviteToFirestore(token, newToken, newHash, null, 1);
+      } else if (inviteState.activeToken && inviteState.activeTokenHash) {
+        const ensureResult = await ensureActiveInviteInFirestore(token);
+        if (!ensureResult.ok) {
+          return res.status(502).json({ error: ensureResult.error || 'Failed to verify active guest invitation in Firestore.' });
+        }
       }
 
       return res.json({
@@ -552,16 +651,22 @@ async function startServer() {
         return res.status(403).json({ error: 'Unauthorized: Owner access required.' });
       }
 
+      await restoreInviteFromFirestoreIfMissing(token);
       const previousHash = inviteState.activeTokenHash;
-      if (previousHash) {
-        inviteState.revokedHashes = [...inviteState.revokedHashes.slice(-99), previousHash];
-        inviteStatusCache.set(previousHash, { active: false, expiresAt: Date.now() + 60_000 });
-      }
-
       const newToken = crypto.randomBytes(24).toString('base64url');
       const newHash = sha256Hex(newToken);
       const nextVersion = (inviteState.version || 0) + 1;
       const nowIso = new Date().toISOString();
+
+      const syncResult = await syncInviteToFirestore(token, newToken, newHash, previousHash, nextVersion);
+      if (!syncResult.ok) {
+        return res.status(502).json({ error: syncResult.error || 'Failed to save new guest invitation to Firestore.' });
+      }
+
+      if (previousHash) {
+        inviteState.revokedHashes = [...inviteState.revokedHashes.slice(-99), previousHash];
+        inviteStatusCache.set(previousHash, { active: false, expiresAt: Date.now() + 60_000 });
+      }
 
       inviteState = {
         ...inviteState,
@@ -572,7 +677,6 @@ async function startServer() {
       };
       saveInviteState(inviteState);
       inviteStatusCache.set(newHash, { active: true, expiresAt: Date.now() + 60_000 });
-      await syncInviteToFirestore(token, newToken, newHash, previousHash, nextVersion);
 
       return res.json({
         active: true,
@@ -596,14 +700,21 @@ async function startServer() {
         return res.status(403).json({ error: 'Unauthorized: Owner access required.' });
       }
 
+      await restoreInviteFromFirestoreIfMissing(token);
       const previousHash = inviteState.activeTokenHash;
+      const nextVersion = Math.max(1, inviteState.version || 1);
+      const nowIso = new Date().toISOString();
+
+      const syncResult = await syncInviteToFirestore(token, null, null, previousHash, nextVersion);
+      if (!syncResult.ok) {
+        return res.status(502).json({ error: syncResult.error || 'Failed to revoke guest invitation in Firestore.' });
+      }
+
       if (previousHash) {
         inviteState.revokedHashes = [...inviteState.revokedHashes.slice(-99), previousHash];
         inviteStatusCache.set(previousHash, { active: false, expiresAt: Date.now() + 60_000 });
       }
 
-      const nextVersion = Math.max(1, inviteState.version || 1);
-      const nowIso = new Date().toISOString();
       inviteState = {
         ...inviteState,
         activeToken: null,
@@ -612,7 +723,6 @@ async function startServer() {
         updatedAt: nowIso
       };
       saveInviteState(inviteState);
-      await syncInviteToFirestore(token, null, null, previousHash, nextVersion);
 
       return res.json({
         active: false,

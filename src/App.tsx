@@ -214,55 +214,63 @@ export default function App() {
 
   // Process one-click guest invitation links (?invite=...) once Firebase Auth initializes
   React.useEffect(() => {
-    if (authLoading || !pendingInviteTokenRef.current) return;
+    if (authLoading || !pendingInviteTokenRef.current || isRedeemingInviteRef.current) return;
 
     const inviteToken = pendingInviteTokenRef.current;
-    pendingInviteTokenRef.current = null;
-
-    // Clean ?invite= from the browser address bar
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('invite');
-      window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    } catch {
-      // Ignore URL history errors
-    }
 
     // Preserve existing Owner or Paid Customer sessions without switching them to guest
     if (currentUser && (isOwnerUser(currentUser) || (!currentUser.isAnonymous && userAccount?.isPaid === true))) {
+      pendingInviteTokenRef.current = null;
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('invite');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      } catch {
+        // Ignore URL history errors
+      }
       setCurrentScreen('home');
       setHistory(['home']);
       setInviteProcessing(false);
       return;
     }
 
-    let cancelled = false;
     isRedeemingInviteRef.current = true;
     (async () => {
       try {
         const res = await redeemGuestInvite(inviteToken);
-        if (cancelled) return;
+        pendingInviteTokenRef.current = null;
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('invite');
+          window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+        } catch {
+          // Ignore URL history errors
+        }
         setCurrentUser(res.user);
         setIsServerVerifiedGuest(true);
         setInviteError(null);
         setCurrentScreen('home');
         setHistory(['home']);
       } catch (err: any) {
-        if (cancelled) return;
+        pendingInviteTokenRef.current = null;
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('invite');
+          window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+        } catch {
+          // Ignore URL history errors
+        }
         setIsServerVerifiedGuest(false);
         setInviteError(err?.message || 'This guest invitation link is invalid or has been revoked.');
+        if (auth.currentUser?.isAnonymous) {
+          await logout().catch(() => {});
+        }
         setCurrentScreen('auth');
       } finally {
         isRedeemingInviteRef.current = false;
-        if (!cancelled) {
-          setInviteProcessing(false);
-        }
+        setInviteProcessing(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [authLoading, currentUser, userAccount]);
 
   // When user is authenticated and verified paid, owner, or guest, advance past pending/auth screen
@@ -501,7 +509,7 @@ export default function App() {
       return (
         <WelcomeScreen 
           onNavigate={(screen) => navigateTo(screen)} 
-          user={currentUser}
+          user={currentUser?.isAnonymous && !isAccountPaid ? null : currentUser}
           onSignInClick={() => navigateTo('auth')}
         />
       );
